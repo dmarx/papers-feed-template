@@ -1,0 +1,69 @@
+\section{Introduction}
+\label{sec:intro}
+
+Foundation models (FMs), or large models pretrained on massive data then adapted for downstream tasks, have emerged as an effective paradigm in modern machine learning.
+The backbone of these FMs are often
+\emph{sequence models}, operating on arbitrary sequences of inputs from a wide variety of domains such as language, images, speech, audio, time series, and genomics
+\citep{sutskever2014sequence,dosovitskiy2020image,oord2016wavenet,brown2020language,ismail2019deep,poli2023hyena}.
+While this concept is agnostic to a particular choice of model architecture,
+modern FMs are predominantly based on a single type of sequence model: the Transformer~\citep{vaswani2017attention} and its core attention layer\iftoggle{arxiv}{~\citep{bahdanau2015neural}}.
+The efficacy of self-attention is attributed to its ability to route information densely within a context window, allowing it to model complex data.
+However, this property brings fundamental drawbacks: an inability to model anything outside of a finite window,
+and quadratic scaling with respect to the window length.
+An enormous body of research has appeared on more efficient variants of attention to overcome these drawbacks~\citep{tay2022efficient},
+but often at the expense of the very properties that makes it effective.
+As of yet, none of these variants have been shown to be empirically effective at scale across domains.
+
+Recently, structured state space sequence models (SSMs)~\citep{gu2021combining,gu2022efficiently} have emerged as a promising class of architectures for sequence modeling.
+These models can be interpreted as a combination of recurrent neural networks (RNNs) and convolutional neural networks (CNNs), with inspiration from classical state space models \citep{kalman1960new}.
+This class of models can be computed very efficiently as either a recurrence or convolution, with linear or near-linear scaling in sequence length.
+Additionally, they have principled mechanisms for modeling long-range dependencies~\citep{gu2020hippo} in certain data modalities, and have dominated benchmarks such as the Long Range Arena~\citep{tay2021long}.
+Many flavors of SSMs ~\citep{gu2022efficiently,gupta2022diagonal,gu2022parameterization,li2023makes,ma2023mega,smith2023s5,orvieto2023resurrecting}
+have been successful in domains involving continuous signal data such as audio and vision~\citep{goel2022raw,saon2023diagonal,nguyen2022s4nd}.
+However, they have been less effective at modeling discrete and information-dense data such as text.
+
+%
+
+%
+
+We propose a new class of \textbf{selective state space models},
+that improves on prior work on several axes to achieve the modeling power of Transformers while scaling linearly in sequence length.
+%
+
+\para{Selection Mechanism.}
+First, we identify a key limitation of prior models: the ability to efficiently \emph{select} data in an input-dependent manner (i.e.\ focus on or ignore particular inputs).
+Building on intuition based on important synthetic tasks such as selective copy and induction heads, we design a simple selection mechanism by parameterizing the SSM parameters based on the input.
+This allows the model to filter out irrelevant information and remember relevant information indefinitely.
+
+\para{Hardware-aware Algorithm.} This simple change poses a technical challenge for the computation of the model; in fact, all prior SSMs models must be time- and input-invariant in order to be computationally efficient.
+We overcome this with a hardware-aware algorithm that computes the model recurrently with a scan instead of convolution, but does not materialize the expanded state in order to avoid IO access between different levels of the GPU memory hierarchy.
+The resulting implementation is faster than previous methods both in theory (scaling linearly in sequence length, compared to pseudo-linear for all convolution-based SSMs) and on modern hardware (up to 3$\times$ faster on A100 GPUs).
+
+\para{Architecture.}
+We simplify prior deep sequence model architectures by combining the design of prior SSM architectures \citep{dao2023hungry} with the MLP block of Transformers into a single block, leading to a simple and homogenous architecture design (\textbf{Mamba}) incorporating selective state spaces.
+
+
+
+%
+
+Selective SSMs, and by extension the Mamba architecture, are fully recurrent models with key properties that make them suitable as the backbone of general foundation models operating on sequences.
+\begin{enumerate*}[label=(\roman*)]
+\item High quality: selectivity brings strong performance on dense modalities such as language and genomics.
+\item Fast training and inference: computation and memory scales linearly in sequence length during training, and unrolling the model autoregressively during inference requires only constant time per step since it does not require a cache of previous elements.
+\item Long context: the quality and efficiency together yield performance improvements on real data up to sequence length 1M.
+\end{enumerate*}
+
+%
+
+We empirically validate Mamba's potential as a general sequence FM backbone, in both pretraining quality and domain-specific task performance, on several types of modalities and settings:
+\begin{itemize}[leftmargin=*,itemsep=0pt,topsep=0pt]
+  \item \textbf{Synthetics.} On important synthetic tasks such as copying and induction heads that have been proposed as being key to large language models, Mamba not only solves them easily but can \emph{extrapolate solutions indefinitely long} ($>$1M tokens).
+  \item \textbf{Audio and Genomics.} Mamba out-performs prior state-of-the-art models such as SaShiMi, Hyena, and Transformers on modeling audio waveforms and DNA sequences, both in pretraining quality and downstream metrics (e.g. reducing FID on a challenging speech generation dataset by more than half). In both settings, its \emph{performance improves with longer context up to million-length sequences}.
+  \item \textbf{Language Modeling.} Mamba is the first \emph{linear-time sequence model that truly achieves Transformer-quality performance}, both in pretraining perplexity and downstream evaluations.
+    With scaling laws up to 1B parameters, we show that Mamba exceeds the performance of a large range of baselines, including very strong modern Transformer training recipes based on LLaMa~\citep{touvron2023llama}.
+    Our Mamba language model has 5$\times$ generation throughput compared to Transformers of similar size, and Mamba-3B's quality matches that of Transformers twice its size (e.g.\ 4 points higher avg.\ on common sense reasoning compared to Pythia-3B and even exceeding Pythia-7B).
+\end{itemize}
+\iftoggle{arxiv}{
+Model code and pre-trained checkpoints are open-sourced at \url{https://github.com/state-spaces/mamba}.
+}{}
+

@@ -1,0 +1,91 @@
+# .github/workflows/hard-refresh.yml
+name: Hard Refresh
+
+on:
+  workflow_dispatch:  # Manual trigger only
+  
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  # First ensure all tests pass
+  test:
+    uses: ./.github/workflows/test-python.yml
+
+  refresh:
+    needs: test  # Wait for tests to pass
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+      
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install PyGithub
+        pip install . 
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pandoc texlive-base
+    
+    - name: Clear data directory and reopen issues
+      run: |
+        python - <<EOF
+        import os
+        import shutil
+        from github import Github
+        
+        # Clear data directory
+        data_dir = "data"
+        if os.path.exists(data_dir):
+            print(f"Removing {data_dir} directory...")
+            shutil.rmtree(data_dir)
+            os.makedirs(data_dir)
+        
+        # Reopen closed paper/reading issues
+        g = Github(os.environ["GITHUB_TOKEN"])
+        repo = g.get_repo(os.environ["GITHUB_REPOSITORY"])
+        
+        for issue in repo.get_issues(state="closed"):
+            labels = [label.name for label in issue.labels]
+            if "wontfix" in labels:
+                continue
+            if "paper" in labels or "reading-session" in labels:
+                print(f"Reopening issue #{issue.number}")
+                issue.edit(state="open")
+        EOF
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Process events
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: python -m scripts.process_events
+  
+    - name: Download PDFs and Source
+      run: |
+        python -m scripts.asset_manager download-pdfs
+        python -m scripts.asset_manager download-source
+
+    - name: Convert to markdown
+      run: |
+        python -m scripts.asset_manager convert-markdown
+        #python -m scripts.asset_manager retry-failures
+    
+    - name: Commit and push if there are changes
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        commit_message: "chore: Hard refresh"
+        file_pattern: |
+          data/**

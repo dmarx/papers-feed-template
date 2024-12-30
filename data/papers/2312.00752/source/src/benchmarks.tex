@@ -1,0 +1,15 @@
+\subsection{Speed and Memory Benchmarks}
+\label{sec:exp:benchmark}
+
+
+We benchmark the speed of the SSM scan operation (state expansion $N=16$), as well as the end-to-end
+inference throughput of Mamba, in \cref{fig:scan_benchmark}.
+Our efficient SSM scan is faster than the best attention implementation that we know of
+(FlashAttention-2~\citep{dao2023flashattention2}) beyond sequence length 2K,
+and up to 20-40$\times$ faster than a standard scan implementation in
+PyTorch.
+Mamba achieves 4-5$\times$ higher inference throughput than a Transformer of similar
+size, since without the KV cache it can use much higher batch sizes.
+For example, a Mamba-6.9B (untrained) would have higher inference throughput than a
+$5\times$ smaller Transformer-1.3B.
+Details in \cref{sec:exp-details:benchmark}, which additionally includes a benchmark of memory consumption.

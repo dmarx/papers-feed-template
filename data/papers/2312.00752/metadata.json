@@ -1,0 +1,23 @@
+{
+  "arxivId": "2312.00752",
+  "title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+  "authors": "Albert Gu, Tri Dao",
+  "abstract": "Foundation models, now powering most of the exciting applications in deep\nlearning, are almost universally based on the Transformer architecture and its\ncore attention module. Many subquadratic-time architectures such as linear\nattention, gated convolution and recurrent models, and structured state space\nmodels (SSMs) have been developed to address Transformers' computational\ninefficiency on long sequences, but they have not performed as well as\nattention on important modalities such as language. We identify that a key\nweakness of such models is their inability to perform content-based reasoning,\nand make several improvements. First, simply letting the SSM parameters be\nfunctions of the input addresses their weakness with discrete modalities,\nallowing the model to selectively propagate or forget information along the\nsequence length dimension depending on the current token. Second, even though\nthis change prevents the use of efficient convolutions, we design a\nhardware-aware parallel algorithm in recurrent mode. We integrate these\nselective SSMs into a simplified end-to-end neural network architecture without\nattention or even MLP blocks (Mamba). Mamba enjoys fast inference (5$\\times$\nhigher throughput than Transformers) and linear scaling in sequence length, and\nits performance improves on real data up to million-length sequences. As a\ngeneral sequence model backbone, Mamba achieves state-of-the-art performance\nacross several modalities such as language, audio, and genomics. On language\nmodeling, our Mamba-3B model outperforms Transformers of the same size and\nmatches Transformers twice its size, both in pretraining and downstream\nevaluation.",
+  "url": "https://arxiv.org/abs/2312.00752",
+  "issue_number": 2,
+  "issue_url": "https://github.com/dmarx/papers-feed/issues/2",
+  "created_at": "2024-12-30T06:16:26.887281",
+  "state": "open",
+  "labels": [
+    "paper"
+  ],
+  "total_reading_time_seconds": 0,
+  "last_read": null,
+  "last_visited": "2024-12-28T06:13:33.669Z",
+  "main_tex_file": null,
+  "published_date": "2023-12-01T18:01:34Z",
+  "arxiv_tags": [
+    "cs.LG",
+    "cs.AI"
+  ]
+}

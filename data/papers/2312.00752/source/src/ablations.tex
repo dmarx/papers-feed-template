@@ -1,0 +1,174 @@
+\subsection{Model Ablations}
+\label{sec:exp:ablations}
+
+We perform a series of detailed ablations on components of our model,
+focusing on the setting of language modeling with size $\approx 350$M models at Chinchilla token counts (same setting as \cref{fig:lm-scaling}).
+
+\subsubsection{Architecture}
+\cref{tab:ablations-arch} investigates the effects of the architecture (block) and its inner SSM layer (\cref{fig:architecture}).
+We find that
+\begin{itemize}[leftmargin=*,itemsep=0pt]
+  \item Among previous non-selective (LTI) SSMs, which are equivalent to global convolutions, performance is very similar.
+  \item Replacing the complex-valued S4 variant from previous work with a real-valued one does not affect performance much,
+    suggesting that (at least for LM) real-valued SSMs may be a better choice when accounting for hardware efficiency.
+  \item Replacing any of these with a selective SSM (S6) significantly improves performance, validating the motivation of \cref{sec:method}.
+  \item The Mamba architecture performs similarly to the H3 architecture (and seems slightly better when using a selective layer).
+\end{itemize}
+
+We also investigate interleaving the Mamba block with other blocks such as MLP (a traditional architecture) MHA (a hybrid attention architecture)
+in \cref{sec:exp-details:lm:scaling-ablations}.
+
+\subsubsection{Selective SSM}
+
+\cref{tab:ablations-variable} ablates the selective SSM layer by considering different combinations of selective $\dt$, $\B$, and $\C$ parameters (\cref{alg:s6}),
+showing that $\dt$ is the most important parameter due to its connection to RNN gating (\cref{thm:gating}).
+
+\cref{tab:ablations-init} considers different initializations of the SSM, which have been shown to make a large difference in some data modalities and settings \citep{gu2022efficiently,gu2022parameterization}.
+On language modeling, we find that simpler real-valued diagonal initializations (S4D-Real, row 3) instead of more standard complex-valued parameterizations (S4D-Lin, row 1)
+perform better.
+Random initializations also work well, consistent with findings from prior work~\citep{mehta2023long}.
+
+\cref{tab:ablations-dt} and \cref{tab:ablations-N} consider varying the dimension of the $\dt$ and $(\B, \C)$ projections respectively.
+Changing them from static to selective provides the most benefit,
+while increasing the dimensions further generally improves performance modestly with a small increase in parameter count.
+
+
+\begin{table}
+  \caption{
+    (\textbf{Ablations: Architecture and SSM layer}.)
+    The Mamba block performs similarly to H3 while being simpler.
+    In the inner layer, there is little difference among different parameterizations of LTI models,
+    while selective SSMs (S6) provide a large improvement.
+    More specifically, the S4 (real) variant is S4D-Real and the S4 (complex) variant is S4D-Lin.
+  }
+  \centering
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    \textsc{Model} & \textsc{Arch.} & \textsc{SSM Layer} & \iftoggle{arxiv}{\sc{Perplexity}}{\sc{Ppl}} \\
+    \midrule
+    Hyena          & H3             & Hyena              & $10.24$ \\ %
+    H3             & H3             & S4 (complex)       & $10.30$ \\ %
+    -              & H3             & S4 (real)          & $10.34$ \\ %
+    -              & H3             & S6                 & $\mathbf{8.95}$ \\ %
+    \bottomrule
+  \end{tabular}
+  \qquad
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    \textsc{Model} & \textsc{Arch.} & \textsc{SSM Layer} & \iftoggle{arxiv}{\sc{Perplexity}}{\sc{Ppl}} \\
+    \midrule
+    -              & Mamba          & Hyena              & $10.75$ \\ %
+    -              & Mamba          & S4 (complex)       & $10.54$ \\ %
+    -              & Mamba          & S4 (real)          & $10.56$ \\ %
+    Mamba          & Mamba          & S6                 & $\mathbf{8.69}$ \\ %
+    \bottomrule
+  \end{tabular}
+  \label{tab:ablations-arch}
+\end{table}
+
+
+\begin{figure}[!t]
+  \begin{minipage}{.5\linewidth}
+    \centering
+    \captionsetup{type=table}
+    \caption{
+      (\textbf{Ablations: Selective parameters}.)
+      $\dt$ is the most important parameter (\cref{thm:gating}), but using multiple selective parameters together synergizes.
+    }
+    \begin{tabular}{@{}llll@{}}
+      \toprule
+      \sc{Selective} $\dt$ & \sc{Selective} $\B$ & \sc{Selective} $\C$ & \iftoggle{arxiv}{\sc{Perplexity}}{\sc{Ppl}} \\
+      \midrule
+      \xmark               & \xmark              & \xmark              & 10.93 \\ %
+      \xmark               & \cmark              & \xmark              & 10.15 \\ %
+      \xmark               & \xmark              & \cmark              & 9.98 \\ %
+      \cmark               & \xmark              & \xmark              & 9.81 \\ %
+      \cmark               & \cmark              & \cmark              & 8.71 \\
+      \bottomrule
+    \end{tabular}
+    \label{tab:ablations-variable}
+  \end{minipage}
+\hfill
+\begin{minipage}{.45\linewidth}
+  \centering
+  \captionsetup{type=table}
+  \caption{
+    (\textbf{Ablations: Parameterization of $\A$}.)
+    The more standard initializations based on S4D-Lin~\citep{gu2022parameterization} perform worse than S4D-Real or a random initialization,
+    when the SSM is selective.
+  }
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    $\A_n$ \sc{Initialization}          & \sc{Field} & \iftoggle{arxiv}{\sc{Perplexity}}{\sc{Ppl}} \\
+    \midrule
+    $\A_n = -\frac{1}{2} + n i$         & Complex    & 9.16 \\
+    $\A_n = -1/2$                       & Real       & 8.85 \\
+    $\A_n = -(n+1)$                     & Real       & 8.71 \\
+    $\A_n \sim \exp(\mathcal{N}(0, 1))$ & Real       & 8.71 \\
+    \bottomrule
+  \end{tabular}
+  \label{tab:ablations-init}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[!t]
+  \begin{minipage}{.32\linewidth}
+    \captionsetup{type=table}
+    \caption{
+      (\textbf{Ablations: Expressivity of $\dt$}.)
+      The selection mechanism of $\dt$ constructs it with a projection of the input.
+      Projecting it even to dim.\ $1$ provides a large increase in performance;
+      increasing it further provides further improvements at the cost of a modest increase in parameters.
+      State size fixed to $N=16$.
+    }
+    \centering
+    \begin{tabular}{@{}lll@{}}
+      \toprule
+      \sc{Size of $\dt$ proj.} & \sc{Params (M)} & \iftoggle{arxiv}{\sc{Perplexity}}{\sc{Ppl}} \\
+      \midrule
+      -                        & 358.9      & 9.12 \\ %
+      $1$                      & 359.1      & 8.97 \\ %
+      $2$                      & 359.3      & 8.97 \\ %
+      $4$                      & 359.7      & 8.91 \\ %
+      $8$                      & 360.5      & 8.83 \\ %
+      $16$                     & 362.1      & 8.84 \\ %
+      $32$                     & 365.2      & 8.80 \\ %
+      $64$                     & 371.5      & 8.71 \\ %
+      \bottomrule
+    \end{tabular}
+    \label{tab:ablations-dt}
+  \end{minipage}
+  \hfill
+  \begin{minipage}{.65\linewidth}
+    \centering
+    \captionsetup{type=table}
+    \caption{
+      (\textbf{Ablations: SSM state dimension}.)
+      (\emph{Top}) Constant $\B$ and $\C$
+      (\emph{Bottom}) Selective $\B$ and $\C$.
+      Increasing the SSM state dimension $N$, which can be viewed as an expansion factor on the dimension of the recurrent state, can significantly improve performance for a negligible cost in parameters/FLOPs, but only when $\B$ and $\C$ are also selective.
+      Size of $\dt$ projection fixed to $64$.
+    }
+    \begin{tabular}{@{}lll@{}}
+      \toprule
+      \sc{State dimension} $N$ & \sc{Params (M)} & \iftoggle{arxiv}{\sc{Perplexity}}{\sc{Ppl}} \\
+      \midrule
+      $1$                 & 367.1 & 9.88 \\ %
+      $2$                 & 367.4 & 9.86 \\ %
+      $4$                 & 368.0 & 9.82 \\ %
+      $8$                 & 369.1 & 9.82 \\ %
+      $16$                & 371.5 & 9.81 \\ %
+      \midrule
+      $1$                 & 367.1 & 9.73 \\ %
+      $2$                 & 367.4 & 9.40 \\ %
+      $4$                 & 368.0 & 9.09 \\ %
+      $8$                 & 369.1 & 8.84 \\ %
+      $16$                & 371.5 & 8.71 \\ %
+      \bottomrule
+    \end{tabular}
+    \label{tab:ablations-N}
+  \end{minipage}
+\end{figure}
+
+Of particular note is the dramatic improvement of the selective SSM when the state size $N$ is increased, with over a 1.0 perplexity improvement for a cost of only 1\% additional parameters.
+This validates our core motivation in \cref{sec:method:motivation,sec:method:scan}.

@@ -1,0 +1,65 @@
+name: Deploy Paper Feed to GitHub Pages
+
+on:
+  push:
+    paths:
+      - 'data/papers/papers.yaml'
+      - '.github/workflows/deploy_frontend.yaml'
+  workflow_dispatch:
+  schedule:
+    # Run daily at midnight UTC
+    - cron: '0 0 * * *'
+
+concurrency:
+  group: ${{ github.repository }}-event-processing
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install papers-feed-src/.
+
+      - name: Generate HTML
+        run: |
+          python -m scripts.frontend.generate_html \
+            --data_path data/papers/papers.yaml \
+            --template_path papers-feed-src/src/scripts/frontend/index.template.html \
+            --output_path web/index.html
+
+      - name: Ensure presence of .nojekyll file
+        run: touch web/.nojekyll
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        with:
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+  
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./web
+          force_orphan: true # use only latest commit

@@ -1,0 +1,50 @@
+
+For pretraining, we largely follow a standard causal language modeling (next token prediction) setup for the training and model details (see also \cref{sec:exp-details:lm}).
+For the dataset, we largely follow the setup of HyenaDNA~\citep{nguyen2023hyenadna}, which uses the HG38 dataset for pretraining consisting of a single human genome
+with about 4.5 billion tokens (DNA base pairs) in the training split.
+
+\subsubsection{Scaling: Model Size}
+
+
+In this experiment, we investigate the scaling properties of genomics foundation models with various model backbones (\cref{fig:dna} \textit{Left}).
+%
+
+
+\para{Training.}
+To advantage the baselines, we train on a short sequence length of $1024$; as shown in \cref{sec:exp:dna:length}, we expect results to favor Mamba even more at longer sequence lengths.
+We fix a global batch size of $1024$, for a total of $2^{20} \approx 1M$ tokens per batch.
+Models were trained for $10K$ gradient steps for a total of $10B$ tokens.
+
+\para{Results.}
+\cref{fig:dna} (\emph{Left}) shows that Mamba's pretraining perplexity improves smoothly with model size,
+and that Mamba scales better than both HyenaDNA and Transformer++.
+For example, at the largest model size of $\approx 40M$ parameters,
+the curve shows that \textbf{Mamba can match the Transformer++ and HyenaDNA models with roughly $3\times$ to $4\times$ fewer parameters}.
+
+
+\subsubsection{Scaling: Context Length}
+\label{sec:exp:dna:length}
+
+In the next DNA experiment, we investigate the scaling properties of models with respect to sequence length.
+We only compare the HyenaDNA and Mamba models, as quadratic attention becomes prohibitively expensive at longer sequence lengths.
+We pretrain models on sequence lengths $2^{10}=1024$, $2^{12}=4096$, $2^{14}=16384$, $2^{16}=65536$, $2^{18}=262144$, $2^{20}=1048576$.
+We fix a model size of 6 layers by width $128$ (about 1.3M-1.4M parameters).
+Models were trained for $20K$ gradient steps for a total of $\approx 330B$ tokens.
+The longer sequence lengths used sequence length warmup similar to \citep{nguyen2023hyenadna}.
+
+\para{Results.}
+\cref{fig:dna} (\emph{Right}) shows that \textbf{Mamba is able to make use of longer context even up to extremely long sequences of length 1M}, and its pretraining perplexity improves as the context increases.
+On the other hand, the HyenaDNA model gets worse with sequence length.
+This is intuitive from the discussion in \cref{sec:method:properties} on properties of the selection mechanism.
+In particular, LTI models cannot selectively ignore information;
+from a convolutional perspective, a very long convolution kernel is aggregating all information across a long sequence which may be very noisy.
+Note that while HyenaDNA claims to improve with longer context, their results do not control for computation time.
+
+
+\subsubsection{Synthetic Species Classification}
+
+We evaluate models on a downstream task of classifying between 5 different species by randomly sampling a contiguous segment of their DNA.
+This task is adapted from HyenaDNA,
+which used the species $\{ \texttt{human}, \texttt{lemur}, \texttt{mouse}, \texttt{pig}, \texttt{hippo} \}$.
+We modify the task to be significantly more challenging by classifying between the five \emph{great apes} species \\ $\{ \texttt{human}, \texttt{chimpanzee}, \texttt{gorilla}, \texttt{orangutan}, \texttt{bonobo} \}$,
+which are known to share 99\% of their DNA.

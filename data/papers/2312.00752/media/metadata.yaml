@@ -1,0 +1,8 @@
+---
+reference-section-title: "References"
+link-citations: true
+citation-style: ieee
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{amsthm}
+---

@@ -1,0 +1,53 @@
+Full experiment details for these tasks including task details and training protocol are in \cref{sec:exp-details:synthetics}.
+
+\subsubsection{Selective Copying}
+
+
+The Copying task is one of the most well-studied synthetic tasks for sequence modeling,
+originally designed to test the memorization abilities of recurrent models.
+As discussed in \cref{sec:method:motivation}, LTI SSMs (linear recurrences and global convolutions)
+can easily solve this task by only keeping track of time instead of reasoning about the data;
+for example, by constructing a convolution kernel of exactly the right length (\cref{fig:copying}).
+This was explicitly validated in earlier work on global convolutions~\citep{romero2021ckconv}.
+The Selective Copying task prevents this shortcut by randomizing the spacing between tokens.
+Note that this task has been introduced before as the Denoising task~\citep{jing2019gated}.
+
+Note that many previous works argue that adding architecture gating (multiplicative interactions) can endow models with ``data-dependence'' and solve related tasks \citep{dao2023hungry,poli2023hyena}.
+However, we find this explanation insufficient intuitively because such gating does not interact along the sequence axis, and cannot affect the spacing between tokens.
+In particular architecture gating is not an instance of a selection mechanism (\cref{sec:discussion:selection}).
+
+\cref{tab:copying} confirms that gated architectures such as H3 and Mamba only partially improve performance,
+while the selection mechanism (modifying S4 to S6) easily solves this task, particularly when combined with these more powerful architectures.
+
+
+
+\subsubsection{Induction Heads}
+
+Induction heads~\citep{olsson2022context} is a simple task from the mechanistic interpretability lens~\citep{elhage2021mathematical} that is surprisingly predictive of the in-context learning ability of LLMs. It requires models to perform associative recall and copy: for example, if the model has seen a bigram such as ``Harry Potter'' in the sequence, then the next time ``Harry'' appears in the same sequence, the model should be able to predict ``Potter'' by copying from history.
+
+\paragraph{Dataset.}
+We train a 2-layer model on the induction heads task at sequence length $256$, with a vocab size of $16$,
+which is comparable to prior work on this task \citep{dao2023hungry} but with longer sequences.
+We additionally investigate generalization and extrapolation abilities by evaluating on a range of sequence lengths from $2^6 = 64$ up to $2^{20} = 1048576$ at test time.
+
+\paragraph{Models.}
+Following established work on induction heads, we use 2 layer models, which allows attention to mechanistically solve the induction heads task~\citep{olsson2022context}.
+We test both multi-head attention (8 heads, with various positional encodings) and SSM variants.
+We use a model dimension $D$ of $64$ for Mamba and $128$ for the other models.
+
+\paragraph{Results.}
+
+\cref{fig:induction} shows that
+Mamba---or more precisely, its selective SSM layer---has the ability to solve the task perfectly because of its ability to selectively remember the relevant token while ignoring everything else in between.
+\textbf{It generalizes perfectly to million-length sequences, or $4000\times$ longer than it saw during training},
+while no other method goes beyond $2\times$.
+
+Out of positional encoding variants for attention models, xPos (which was designed for length extrapolation) is slightly better than the others;
+also note that all attention models were only tested up to sequence length $2^{14}=16384$ due to memory limitations.
+Out of other SSMs, H3 and Hyena are similar, contrary to the findings in \citet{poli2023hyena}.
+
+%
+
+
+
+

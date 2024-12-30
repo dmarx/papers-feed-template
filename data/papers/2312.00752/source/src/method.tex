@@ -1,0 +1,400 @@
+
+
+\section{Selective State Space Models}
+\label{sec:method}
+
+We motivate our selection mechanism using intuition from synthetic tasks (\cref{sec:method:motivation}), then explain how to incorporate this mechanism into state space models (\cref{sec:method:selective}).
+The resulting time-varying SSMs cannot use convolutions, presenting a technical challenge of how to compute them efficiently.
+We overcome this with a hardware-aware algorithm that exploits the memory hierarchy on modern hardware (\cref{sec:method:scan}).
+We then describe a simple SSM architecture without attention or even MLP blocks (\cref{sec:method:architecture}).
+Finally, we discuss some additional properties of selection mechanisms (\cref{sec:method:properties}).
+
+\subsection{Motivation: Selection as a Means of Compression}
+\label{sec:method:motivation}
+
+We argue that a fundamental problem of sequence modeling is \emph{compressing context into a smaller state}.
+In fact, we can view the tradeoffs of popular sequence models from this point of view.
+For example, attention is both effective and inefficient because it explicitly does not compress context at all.
+This can be seen from the fact that autoregressive inference requires explicitly storing the entire context (i.e.\ the KV cache), which directly causes the slow linear-time inference and quadratic-time training of Transformers.
+On the other hand, recurrent models are efficient because they have a finite state, implying constant-time inference and linear-time training.
+However, their effectiveness is limited by how well this state has compressed the context.
+
+To understand this principle,
+we focus on two running examples of synthetic tasks (\cref{fig:copying}).
+\begin{itemize}[leftmargin=*,itemsep=0pt,topsep=0pt]
+  \item The \textbf{Selective Copying} task modifies the popular Copying task \citep{arjovsky2016unitary} by varying the position of the tokens to memorize. It requires \emph{content-aware} reasoning to be able to memorize the relevant tokens (\emph{colored}) and filter out the irrelevant ones (\emph{white}).
+  \item The \textbf{Induction Heads} task is a well-known mechanism hypothesized to explain the majority of in-context learning abilities of LLMs~\citep{olsson2022context}. It requires \emph{context-aware} reasoning to know when to produce the correct output in the appropriate context (\emph{black}).
+\end{itemize}
+
+These tasks reveal the failure mode of LTI models. From the recurrent view, their constant dynamics (e.g.\ the $\dAB$ transitions in \eqref{eq:ssm:recurrence}) cannot let them select the correct information from their context, or affect the hidden state passed along the sequence in an input-dependent way.
+From the convolutional view, it is known that global convolutions can solve the vanilla Copying task \citep{romero2021ckconv} because it only requires time-awareness, but that they have difficulty with the Selective Copying task because of lack of content-awareness (\cref{fig:copying}).
+More concretely, the spacing between inputs-to-outputs is varying and cannot be modeled by static convolution kernels.
+
+In summary, the efficiency vs.\ effectiveness tradeoff of sequence models is characterized by how well they compress their state:
+efficient models must have a small state, while effective models must have a state that contains all necessary information from the context.
+In turn, we propose that a fundamental principle for building sequence models is
+\textbf{selectivity}: or the context-aware ability to focus on or filter out inputs into a sequential state.
+In particular, a selection mechanism controls how information propagates or interacts along the sequence dimension (see \cref{sec:method:properties} for more discussion).
+
+%
+
+%
+
+%
+
+\begin{figure*}[!t]
+  \centering
+  \includegraphics[width=\linewidth]{fig/copying.pdf}
+  \caption{
+    (\textit{Left}) The standard version of the Copying task involves constant spacing between input and output elements and is easily solved by time-invariant models such as linear recurrences and global convolutions.
+    (\textit{Right Top}) The Selective Copying task has random spacing in between inputs and requires time-varying models that can \textit{selectively} remember or ignore inputs depending on their content.
+    (\textit{Right Bottom}) The Induction Heads task is an example of associative recall that requires retrieving an answer based on context, a key ability for LLMs.
+  }
+  \label{fig:copying}
+  \iftoggle{arxiv}{}{\vspace{-1em}}
+\end{figure*}
+
+
+\subsection{Improving SSMs with Selection}
+\label{sec:method:selective}
+
+
+One method of incorporating a selection mechanism into models is by letting their parameters that affect interactions along the sequence (e.g.\ the recurrent dynamics of an RNN or the convolution kernel of a CNN) be input-dependent.
+
+\cref{alg:s4,alg:s6} illustrates the main selection mechanism that we use. %
+The main difference is simply making several parameters $\dt, \B, \C$ functions of the input, %
+along with the associated changes to tensor shapes throughout.
+In particular, we highlight that these parameters now have a length dimension $L$,
+meaning that the model has changed from time-invariant to time-varying.
+(Note that shape annotations were described in \cref{sec:background}.)
+This loses the equivalence to convolutions~\eqref{eq:ssm:convolution} with implications for its efficiency, discussed next. %
+
+We specifically choose $s_B(x) = \mathsf{Linear}_N(x)$, $s_C(x) = \mathsf{Linear}_N(x)$,
+$s_\dt(x) = \mathsf{Broadcast}_D(\mathsf{Linear}_1(x))$, and $\tau_\dt = \mathsf{softplus}$,
+where $\mathsf{Linear}_d$ is a parameterized projection to dimension $d$.
+The choice of $s_\dt$ and $\tau_\dt$ is due to a connection to RNN gating mechanisms explained in \cref{sec:method:properties}.
+
+
+\begin{figure*}[!t]
+  \begin{minipage}{.49\linewidth}
+    \begin{algorithm}[H]
+      \small
+      \algrenewcommand\algorithmicrequire{\textbf{Input: }}
+      \algrenewcommand\algorithmicensure{\textbf{Output: }}
+      \caption{SSM (S4)}
+      \label{alg:s4}
+      \begin{algorithmic}[1]
+        \Require $x : \mathtt{(B, L, D)}$
+        \Ensure $y : \mathtt{(B, L, D)}$
+        \State $\A : \mathtt{(D, N)} \gets \mathsf{Parameter}$
+
+        \Comment{Represents structured $N \times N$ matrix}
+        \State $\B : \mathtt{(D, N)} \gets \mathsf{Parameter}$
+        \State $\C : \mathtt{(D, N)} \gets \mathsf{Parameter}$
+        \State $\dt : \mathtt{(D)} \gets \tau_\dt(\mathsf{Parameter})$
+        \State $\dA, \dB : \mathtt{(D, N)} \gets \mathsf{discretize}(\dt, \A, \B)$
+        \State $y \gets \mathsf{SSM}(\dA, \dB, \C)(x)$
+
+        \Comment{Time-invariant: recurrence or convolution}
+        \State \textbf{return} $y$
+      \end{algorithmic}
+    \end{algorithm}
+  \end{minipage}
+  \begin{minipage}{.49\linewidth}
+    \begin{algorithm}[H]
+      \small
+      \algrenewcommand\algorithmicrequire{\textbf{Input: }}
+      \algrenewcommand\algorithmicensure{\textbf{Output: }}
+      \caption{SSM + Selection (S6)}
+      \label{alg:s6}
+      \begin{algorithmic}[1]
+        \Require $x : \mathtt{(B, L, D)}$
+        \Ensure $y : \mathtt{(B, L, D)}$
+        \State $\A : \mathtt{(D, N)} \gets \mathsf{Parameter}$
+
+        \Comment{Represents structured $N \times N$ matrix}
+        \State $\B : \textcolor{BrickRed}{\mathtt{(B, L, N)}} \gets \textcolor{BrickRed}{s_B(x)}$
+        \State $\C : \textcolor{BrickRed}{\mathtt{(B, L, N)}} \gets \textcolor{BrickRed}{s_C(x)}$
+        \State $\dt : \textcolor{BrickRed}{\mathtt{(B, L, D)}} \gets \tau_\dt(\mathsf{Parameter} \textcolor{BrickRed}{+ s_\dt(x)})$
+        \State $\dA, \dB : \textcolor{BrickRed}{\mathtt{(B, L, D, N)}} \gets \mathsf{discretize}(\dt, \A, \B)$
+        \State $y \gets \mathsf{SSM}(\dA, \dB, \C)(x)$
+
+        \Comment{\textcolor{BrickRed}{Time-varying}: recurrence (\textcolor{BrickRed}{\emph{scan}}) only}
+        \State \textbf{return} $y$
+      \end{algorithmic}
+    \end{algorithm}
+  \end{minipage}
+  \iftoggle{arxiv}{}{\vspace{-1em}}
+\end{figure*}
+
+
+\subsection{Efficient Implementation of Selective SSMs}
+\label{sec:method:scan}
+
+%
+
+Hardware-friendly primitives such as convolutions~\citep{krizhevsky2012imagenet} and attention~\citep{bahdanau2015neural,vaswani2017attention} enjoy widespread application.
+Here we aim to make selective SSMs efficient on modern hardware (GPUs) as well.
+The selection mechanism is quite natural, and earlier works attempted to incorporate special cases of selection, such as letting $\dt$ vary over time in recurrent SSMs~\citep{gu2020hippo}.
+However,
+\iftoggle{arxiv}{
+as previously mentioned a core limitation in the usage of SSMs is their computational efficiency,
+}{
+this was computationally difficult,
+}
+which was why S4 and all derivatives used LTI (non-selective) models, most commonly in the form of global convolutions.
+
+\iftoggle{arxiv}{
+\subsubsection{Motivation of Prior Models}
+
+We first revisit this motivation and overview our approach to overcome limitations of prior methods.
+
+
+\begin{itemize}[leftmargin=*,itemsep=0pt]
+  \item At a high level, recurrent models such as SSMs always balance a tradeoff between expressivity and speed: as discussed in \cref{sec:method:motivation}, models with larger hidden state dimension should be more effective but slower. Thus we want to \emph{maximize hidden state dimension without paying speed and memory costs}.
+
+  \item Note that the recurrent mode is more flexible than the convolution mode, since the latter \eqref{eq:ssm:convolution} is derived from expanding the former \eqref{eq:ssm:recurrence} \citep{gu2021combining,gu2022efficiently}.
+  However, this would require computing and materializing the latent state $h$ with shape $\mathtt{(B,L,D,N)}$, which is much larger (by a factor of $N$, the SSM state dimension) than the input $x$ and output $y$ of shape $\mathtt{(B,L,D)}$.
+  Thus the more efficient convolution mode was introduced which could bypass the state computation and materializes a convolution kernel \eqref{eq:ssm:convolution:1} of size only $\mathtt{(B,L,D)}$.
+
+\item Prior LTI state space models leverage the dual recurrent-convolutional forms to increase the effective state dimension by a factor of $N$ ($\approx 10-100$), much larger than traditional RNNs, without efficiency penalties.
+\end{itemize}
+
+
+
+\subsubsection{Overview of Selective Scan: Hardware-Aware State Expansion}
+}{}
+
+The selection mechanism is designed to overcome the limitations of LTI models;
+at the same time, we therefore need to revisit the computation problem of SSMs.
+We address this with three classical techniques: kernel fusion, parallel scan, and recomputation.
+We make two main observations:
+\begin{itemize}[leftmargin=*,itemsep=0pt,topsep=0pt]
+\item The naive recurrent computation uses $O(BLDN)$ FLOPs while the convolutional computation uses $O(BLD\log(L))$ FLOPs, and the former has a lower constant factor.
+Thus for long sequences and not-too-large state dimension $N$, the recurrent mode can actually use fewer FLOPs.
+\item The two challenges are the sequential nature of recurrence, and the large memory usage.
+To address the latter, just like the convolutional mode, we can attempt to not actually materialize the full state $h$.
+\end{itemize}
+
+The main idea is to leverage properties of modern accelerators (GPUs) to materialize the state $h$ only in more efficient levels of the memory hierarchy.
+In particular, most operations (except matrix multiplication)
+are bounded by memory bandwidth~\citep{williams2009roofline,ivanov2021data,dao2022flashattention}.
+This includes our scan operation,
+and we use
+kernel fusion to reduce the amount of memory IOs, leading to a significant speedup
+compared to a standard implementation.
+
+Concretely, instead of preparing the scan input
+$\dAB$ of size $\mathtt{(B,L,D,N)}$ in GPU HBM
+(high-bandwidth memory),
+we load the SSM parameters $(\dt, \A, \B, \C)$ directly from slow HBM to fast SRAM,
+perform the discretization and recurrence in SRAM,
+and then write the final outputs of size $(\mathtt{B,L,D})$ back to HBM.
+
+To avoid the sequential recurrence, we observe that
+despite not being linear it can still be parallelized with a
+work-efficient parallel scan algorithm~\citep{blelloch1990prefix,martin2018parallelizing,smith2023s5}.
+
+\iftoggle{arxiv}{
+Finally, we must also avoid saving the intermediate states, which are necessary for backpropagation.
+We carefully apply the classic technique of recomputation to reduce the memory requirements: the intermediate states are not stored but recomputed in the backward pass when the inputs are loaded from HBM to SRAM.
+As a result, the fused selective scan layer has the same memory requirements as an optimized
+transformer implementation with FlashAttention.
+
+}{}
+Details of the fused kernel and recomputation are in~\cref{sec:hardware_aware_algo}.
+\iftoggle{arxiv}{
+  The full Selective SSM layer and algorithm is illustrated in \cref{fig:selection}.
+}{}
+
+\iftoggle{arxiv}{
+%
+}{}
+
+
+
+
+\subsection{A Simplified SSM Architecture}
+\label{sec:method:architecture}
+
+
+As with structured SSMs, selective SSMs are standalone sequence transformations that can be flexibly incorporated into neural networks.
+The H3 architecture is the basis for the most well-known SSM architectures (\cref{sec:background}), %
+which are generally comprised of a block inspired by linear attention interleaved with an MLP (multi-layer perceptron) block.
+We simplify this architecture by combining these two components into one, which is stacked homogenously (\cref{fig:architecture}).
+\iftoggle{arxiv}{This is inspired by the gated attention unit (GAU)~\citep{hua2022transformer}, which did something similar for attention.}{}
+
+This architecture involves expanding the model dimension $D$ by a controllable expansion factor $E$.
+For each block, most of the parameters ($3ED^2$) are in the linear projections
+\iftoggle{arxiv}{($2ED^2$ for input projections, $ED^2$ for output projection)}{}
+while the inner SSM contributes less.
+\iftoggle{arxiv}{
+  The number of SSM parameters (projections for $\Delta, \B, \C$, and the matrix $\A$) are much smaller in comparison.
+}{}%
+\iftoggle{arxiv}{
+  We repeat this block, interleaved with standard normalization and residual connections, to form the Mamba architecture.
+}{}%
+We always fix to $E=2$ in our experiments and use two stacks of the block to match the $12D^2$ parameters of a Transformer's interleaved MHA (multi-head attention) and MLP blocks.
+\iftoggle{arxiv}{
+We use the SiLU / Swish activation function~\citep{hendrycks2016gaussian,ramachandran2017swish},
+motivated so that the Gated MLP becomes the popular ``SwiGLU'' variant~\citep{dauphin2017language,shazeer2020glu,chowdhery2022palm,touvron2023llama}.
+}{}
+\iftoggle{arxiv}{
+Finally, we additionally use an optional normalization layer (we choose LayerNorm~\citep{ba2016layer}),
+motivated by RetNet's usage of a normalization layer in a similar location~\citep{sun2023retentive}.
+}{}
+
+%
+
+\begin{figure*}[!t]
+  \centering
+  \includegraphics[width=\iftoggle{arxiv}{0.9\linewidth}{0.75\linewidth}]{fig/architecture.pdf}
+  \caption{
+    (\textbf{Architecture}.) Our simplified block design combines the H3 block, which is the basis of most SSM architectures, with the ubiquitous MLP block of modern neural networks. Instead of interleaving these two blocks, we simply repeat the Mamba block homogenously.
+    Compared to the H3 block, Mamba replaces the first multiplicative gate with an activation function.
+    Compared to the MLP block, Mamba adds an SSM to the main branch.
+    For $\sigma$ we use the SiLU / Swish activation~\citep{hendrycks2016gaussian,ramachandran2017swish}.
+  }
+  \label{fig:architecture}
+  \iftoggle{arxiv}{}{\vspace{-1.25em}}
+\end{figure*}
+
+\subsection{Properties of Selection Mechanisms}
+\label{sec:method:properties}
+
+The selection mechanism is a broader concept that can be applied in different ways,
+such as to more traditional RNNs or CNNs, to different parameters (e.g. $\A$ in \cref{alg:s6}), or using different transformations $s(x)$.
+
+\iftoggle{arxiv}{
+  \subsubsection{Connection to Gating Mechanisms}
+}{}
+We highlight the most important connection: the classical gating mechanism of RNNs is an instance of our selection mechanism for SSMs.
+We note that the connection between RNN gating and the discretization of continuous-time systems is well established~\citep{funahashi1993approximation,tallec2018can}.
+In fact, \cref{thm:gating} is an improvement of \citet[Lemma 3.1]{gu2021combining} generalizing to the ZOH discretization and input-dependent gates (proof in \cref{sec:mechanics}).
+More broadly, $\dt$ in SSMs can be seen to play a generalized role of the RNN gating mechanism.
+In line with prior work, we adopt the view that \emph{discretization of SSMs is the principled foundation of heuristic gating mechanisms}.
+\begin{theorem}
+  \label{thm:gating}
+  When $N=1, \A=-1, \B=1, s_\dt=\mathsf{Linear}(x)$, and $\tau_\dt=\mathsf{softplus}$,
+  then the selective SSM recurrence (\cref{alg:s6}) takes the form
+  \iftoggle{arxiv}{
+    \begin{equation}%
+      \label{eq:gates}
+      \begin{aligned}
+        g_t &= \sigma(\mathsf{Linear}(x_t)) \\
+        h_{t} &= (1-g_t) h_{t-1} + g_t x_t
+        .
+      \end{aligned}
+    \end{equation}
+  }{
+    $g_t = \sigma(\mathsf{Linear}(x_t))$ (the \emph{gate}) and $h_{t} = (1-g_t) h_{t-1} + g_t x_t$.
+  }
+\end{theorem}
+
+As mentioned in \cref{sec:method:selective}, our specific choices of $s_\dt, \tau_\dt$ is from this connection.
+In particular, note that if a given input $x_t$ should be completely ignored (as necessary in the synthetic tasks),
+all $D$ channels should ignore it, and so we project the input down to $1$ dimension before repeating/broadcasting with $\dt$.
+
+
+\iftoggle{arxiv}{
+\subsubsection{Interpretation of Selection Mechanisms}
+}{}
+
+We elaborate on \iftoggle{arxiv}{three}{two} particular mechanistic effects of selection.
+
+\para{Variable Spacing.}
+Selectivity allows filtering out irrelevant noise tokens that may occur between inputs of interest.
+This is exemplified by the Selective Copying task, but occurs ubiquitously in common data modalities, particularly for discrete data -- for example the presence of language fillers such as ``um''.
+This property arises because the model can mechanistically filter out any particular input $x_t$, for example in the gated RNN case (\cref{thm:gating}) when $g_t \to 0$.
+
+\para{Filtering Context.}
+It has been empirically observed that many sequence models do not improve with longer context~\citep{shi2023large}, despite the principle that more context should lead to strictly better performance. %
+An explanation is that many sequence models cannot effectively ignore irrelevant context when necessary; an intuitive example are global convolutions (and general LTI models).
+On the other hand, selective models can simply reset their state at any time to remove extraneous history,
+and thus their performance in principle improves monotonicly with context length (e.g.\ \cref{sec:exp:dna:length}).
+
+\iftoggle{arxiv}{
+  \para{Boundary Resetting.}
+  In settings where multiple independent sequences are stitched together, Transformers can keep them separate by instantiating a particular attention mask,
+  while LTI models will bleed information between the sequences.
+  Selective SSMs can also reset their state at boundaries (e.g.\ $\Delta_t \to \infty$, or \cref{thm:gating} when $g_t \to 1$).
+  These settings may occur artificially (e.g. packing documents together to improve hardware utilization)
+  or naturally (e.g.\ episode boundaries in reinforcement learning~\citep{lu2023structured}).
+}{}
+
+%
+
+\iftoggle{arxiv}{
+Additionally, we elaborate on effects of each selective parameter.
+
+\paragraph{Interpretation of $\dt$.}
+In general, $\dt$ controls the balance between how much to focus or ignore the current input $x_t$.
+It generalizes RNN gates (e.g.\ $g_t$ in \cref{thm:gating}):
+mechanically, a large $\dt$ resets the state $h$ and focuses on the current input $x$,
+while a small $\dt$ persists the state and ignores the current input.
+SSMs \eqref{eq:ssm}-\eqref{eq:ssm:recurrence} can be interpreted as a continuous system discretized by a timestep $\dt$,
+and in this context the intuition is that large $\dt \to \infty$ represents the system focusing on the current input for longer (thus ``selecting'' it and forgetting its current state)
+while a small $\dt \to 0$ represents a transient input that is ignored.
+
+\paragraph{Interpretation of $\A$.}
+}
+
+We remark that while the $\A$ parameter could also be selective, it ultimately affects the model only through its interaction with $\dt$ via $\dA = \exp(\dt \A)$ (the discretization\iftoggle{arxiv}{~\eqref{eq:zoh})}{}.
+Thus selectivity in $\dt$ is enough to ensure selectivity in $\dAB$, and is the main source of improvement.
+We hypothesize that making $\A$ selective in addition to (or instead of) $\dt$ would have similar performance,
+and leave it out for simplicity.
+
+\iftoggle{arxiv}{
+\paragraph{Interpretation of $\B$ and $\C$.}
+As discussed in \cref{sec:method:motivation}, the most important property of selectivity is filtering out irrelevant information
+so that a sequence model's context can be compressed into an efficient state.
+In an SSM, modifying $\B$ and $\C$ to be selective allows finer-grained control over whether to let an input $x_t$ into the state $h_t$, or the state into the output $y_t$.
+These can be interpreted as allowing the model to modulate the recurrent dynamics based on content (input) and context (hidden states) respectively.
+
+}
+
+\iftoggle{arxiv}{
+\subsection{Additional Model Details}
+\label{sec:method:details}
+
+%
+
+\paragraph{Real vs.\ Complex.}
+Most prior SSMs use complex numbers in their state $h$, which is necessary for strong performance on many tasks in perceptual modalities~\citep{gu2022efficiently}.
+However, it has been empirically observed that completely real-valued SSMs seem to work fine, and possibly even better, in some settings~\citep{ma2023mega}.
+We use real values as the default, which work well for all but one of our tasks;
+we hypothesize that the complex-real tradeoff is related to the continuous-discrete spectrum in data modalities, where complex numbers are helpful for continuous modalities (e.g.\ audio, video) but not discrete (e.g.\ text, DNA).
+
+\paragraph{Initialization.}
+Most prior SSMs also suggest special initializations, particularly in the complex-valued case, which can help in several settings such as low-data regimes.
+Our default initialization for the complex case is S4D-Lin
+and for the real case is S4D-Real~\citep{gu2022parameterization},
+which is based on the HIPPO theory~\citep{gu2020hippo}.
+These define the $n$-th element of $\A$ as $-1/2 + n i$
+and $-(n+1)$ respectively.
+However, we expect many initializations to work fine, particularly in the large-data and real-valued SSM regimes;
+some ablations are considered in \cref{sec:exp:ablations}.
+
+\paragraph{Parameterization of $\dt$.}
+We defined the selective adjustment to $\dt$ as $s_\dt(x) = \mathsf{Broadcast}_D(\mathsf{Linear}_1(x))$,
+which was motivated by the mechanics of $\dt$ (\cref{sec:method:properties}).
+We observe that it can be generalized
+from dimension $1$ to a larger dimension $\mathtt{R}$.
+We set this to be a small fraction of $\mathtt{D}$,
+which uses a negligible number of parameters compared to the main Linear projections in the block.
+We additionally note that the broadcasting operation can instead
+be viewed as another Linear projection, initialized to a specific pattern of $1$'s and $0$'s;
+if this projection is trainable, this leads to the alternative $s_\dt(x) = \mathsf{Linear}_D(\mathsf{Linear}_R(x))$, which can be viewed as a low-rank projection.
+
+In our experiments, the $\dt$ parameter (which can be viewed as a bias term) is initialized to $\tau_\dt^{-1}(\mathsf{Uniform}([0.001, 0.1]))$,
+following prior work on SSMs~\citep{gu2023train}.
+
+%
+}
+
+
+\begin{remark}
+  For brevity in our experimental results, we sometimes abbreviate selective SSMs as \emph{S6 models}, because they are S4 models with a \emph{selection} mechanism and computed with a \emph{scan}.
+\end{remark}
+
+

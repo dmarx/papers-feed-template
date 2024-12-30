@@ -1,0 +1,34 @@
+\section{Discussion}
+\label{sec:discussion}
+
+We discuss related work, limitations, and some future directions.
+
+\paragraph{Related Work.}
+\cref{sec:discussion:selection} discusses how the selection mechanism relates to similar concepts.
+\cref{sec:related} has an extended related work of SSMs and other related models.
+
+\paragraph{No Free Lunch: Continuous-Discrete Spectrum.}
+Structured SSMs were originally defined as discretizations of continuous systems \eqref{eq:ssm},
+and have had a strong inductive bias toward continuous-time data modalities such as perceptual signals (e.g.\ audio, video).
+As discussed in \cref{sec:method:motivation,sec:method:properties}, the selection mechanism overcomes their weaknesses
+on discrete modalities such as text and DNA;
+but this conversely can impede their performance on data that LTI SSMs excel on.
+Our ablations on audio waveforms examine this tradeoff in more detail.
+
+\paragraph{Downstream Affordances.}
+Transformer-based foundation models (particularly LLMs) have a rich ecosystem of properties and modes of interaction with pretrained models,
+such as fine-tuning, adaptation, prompting, in-context learning, instruction tuning, RLHF, quantization, and so on.
+We are particularly interested in whether Transformer alternatives such as SSMs have similar properties and affordances.
+
+%
+
+\paragraph{Scaling.}
+Our empirical evaluation is limited to small model sizes,
+below the threshold of most strong open source LLMs (e.g. Llama \citep{touvron2023llama})
+as well as other recurrent models such as RWKV~\citep{peng2023rwkv} and RetNet~\citep{sun2023retentive},
+which have been evaluated at the 7B parameter scale and beyond.
+It remains to assess whether Mamba still compares favorably at these larger sizes.
+We also note that scaling SSMs may involve further engineering challenges and adjustments to the model
+that are not discussed in this paper.
+
+%

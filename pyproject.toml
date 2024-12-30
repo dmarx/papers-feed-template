@@ -1,0 +1,124 @@
+[project]
+name = "scripts"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.11"
+dependencies = [
+   "pyyaml", # todo: deprecate in favor of omegaconf
+    "llamero>=0.2.5", # brings along loguru, jinja, tomli, fire, tree-format, omegaconf, pytest
+    "aiohttp",
+    "pydantic",
+    "requests"
+]
+readme = "README.md"
+license = {file = "LICENSE"}
+
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["papers-feed-src/src"]
+include = ["scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=scripts --no-cov-on-fail --asyncio-mode=strict"
+markers = ["integration: marks tests as integration tests"]
+
+[tool.readme.tree]
+ignore_patterns = [
+    "__pycache__",
+    "*.pyc",
+    ".git",
+    ".venv",
+    ".pytest_cache",
+    ".vscode",
+    ".idea",
+    "*.egg-info",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+    ".Python",
+    "*.so",
+    ".gitkeep",
+    "_version.py"
+]
+
+[tool.readme.sections.order]
+"introduction.md.j2" = 0
+"features.md.j2" = 1
+"prerequisites.md.j2" = 2
+"setup.md.j2" = 2.1
+"installation.md.j2" = 2.2
+"usage.md.j2" = 3
+"development.md.j2" = 4
+"summaries.md.j2" = 5
+"site.md.j2" = 6
+"structure.md.j2" = 7
+"todo.md.j2" = 999
+
+[tool.summary]
+max_file_size_kb = 500  # Skip files larger than 1MB
+
+# File patterns to exclude
+exclude_patterns = [
+    '.git',
+    '.gitignore',
+    '.pytest_cache',
+    '__pycache__',
+    'SUMMARY',
+    '.coverage',
+    '.env',
+    '.venv',
+    '.idea',
+    '.vscode',
+    'README.md',
+    'README_LLM.md',
+    'package-lock.json',
+    'REGISTRY.md',
+    'research.yaml',
+    'registry.yaml',
+    'bibliography',
+    '.bibtex',
+    'metadata.json',
+    'events.log',
+    'papers.yaml'
+]
+
+# File extensions to include
+include_extensions = [
+    '.py',
+    '.md',
+    '.txt',
+    '.yml',
+    '.yaml',
+    '.toml',
+    '.json',
+    '.html',
+    '.css',
+    '.js',
+    '.ts',
+    '.tsx',
+    '.j2'
+]
+
+# Directories to exclude
+exclude_directories = [
+    '.git',
+    '__pycache__',
+    '.pytest_cache',
+    '.venv',
+    '.idea',
+    '.vscode',
+    'data'
+]

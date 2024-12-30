@@ -1,0 +1,188 @@
+\documentclass{article} %
+\usepackage{etoolbox}       %
+
+\usepackage{amsmath,amsthm}   %
+\usepackage{mathtools}  %
+\usepackage[dvipsnames]{xcolor}         %
+
+\newtoggle{arxiv}
+\toggletrue{arxiv}
+\iftoggle{arxiv}{
+  \usepackage[parfill]{parskip}
+  \usepackage[citestyle=authoryear-comp,sorting=nyt,maxbibnames=99,backend=biber]{biblatex}
+  \newcommand{\citep}{\parencite}
+  \newcommand{\citet}{\textcite}
+  \addbibresource{biblio.bib}  %
+
+  \setlength{\textwidth}{6.8in}  %
+  \setlength{\textheight}{9in}
+  \setlength{\oddsidemargin}{0in}
+  \setlength{\evensidemargin}{0in}
+  \setlength{\topmargin}{-0.5in}
+  \newlength{\defbaselineskip}
+  \setlength{\defbaselineskip}{\baselineskip}
+  \setlength{\marginparwidth}{0.8in}
+  \setlength{\parskip}{6pt}%
+  \setlength{\parindent}{0pt}%
+
+  \RequirePackage[T1]{fontenc}
+  \RequirePackage[tt=false, type1=true]{libertine}
+  \RequirePackage[varqu]{zi4}
+  \RequirePackage[libertine]{newtxmath}
+
+}{
+  \usepackage{amsfonts}       %
+\usepackage{colm2024_conference}
+  \addtolength{\tabcolsep}{-3pt} %
+  \def\setstretch#1{\renewcommand{\baselinestretch}{#1}}
+  \setstretch{0.98}
+  \addtolength{\parskip}{-1pt}
+
+  \usepackage[compact]{titlesec}
+  \titlespacing{\section}{0pt}{*1}{*0}
+  \titlespacing{\subsection}{0pt}{*1}{*0}
+  \usepackage[subtle, mathdisplays=tight, charwidths=tight, leading=normal]{savetrees}
+  \addtolength\textfloatsep{-0.5em}
+  \addtolength\intextsep{-0.2em}
+\bibliographystyle{colm2024_conference}
+}
+
+
+\usepackage{bm}
+\usepackage{bbm}
+
+\usepackage{booktabs}       %
+\usepackage{nicefrac}       %
+\usepackage{microtype}      %
+\usepackage{multirow}
+\usepackage[inline]{enumitem}
+\usepackage{diagbox}
+\usepackage{comment}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage[font=small]{caption} %
+\usepackage{algorithm,algorithmicx,algpseudocode} %
+\usepackage{subcaption}
+
+\usepackage{url}
+\usepackage{hyperref}
+\hypersetup{
+     colorlinks   = true,
+     linkcolor    = blue,
+     citecolor    = magenta,
+     urlcolor     = red,
+     pdfborderstyle={/S/U/W 1},
+}
+
+\usepackage[capitalise,noabbrev]{cleveref}  %
+
+
+\usepackage{pifont}%
+\newcommand{\cmark}{\ding{51}}%
+\newcommand{\xmark}{\ding{55}}%
+
+
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{lemma}{Lemma}[section]
+\newtheorem{corollary}[lemma]{Corollary}
+\newtheorem{observation}[lemma]{Observation}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}[lemma]{Remark}
+\newtheorem{claim}{Claim}
+
+\newcommand{\paren}[1]{\left (#1 \right)}
+\newcommand{\dd}{\mathop{}\!d}
+\DeclareMathOperator*{\diag}{diag}
+\newcommand{\NAME}{Mamba}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\dt}{\Delta}
+\newcommand{\A}{\bm{A}}
+\newcommand{\B}{\bm{B}}
+\newcommand{\C}{\bm{C}}
+\newcommand{\D}{\bm{D}}
+\newcommand{\K}{\overline{\bm{K}}}
+
+\newcommand{\da}{\overline{\bm{A}}}
+\newcommand{\db}{\overline{\bm{B}}}
+\newcommand{\dA}{\overline{\bm{A}}}
+\newcommand{\dB}{\overline{\bm{B}}}
+
+\newcommand{\AB}{(\A, \B)}
+\newcommand{\ABC}{(\A, \B, \C)}
+\newcommand{\dtAB}{(\dt, \A, \B)}
+\newcommand{\dtABC}{(\dt, \A, \B, \C)}
+\newcommand{\dAB}{(\dA, \dB)}
+
+
+\newcommand{\para}[1]{\iftoggle{arxiv}{\paragraph{#1}}{\textbf{#1}}}
+\newcommand{\maybe}[1]{\textcolor{blue}{#1}}
+
+\newcommand*\samethanks[1][\value{footnote}]{\footnotemark[#1]}
+\iftoggle{arxiv}{
+  \title{Mamba: Linear-Time Sequence Modeling with Selective State Spaces}
+  \usepackage{authblk}
+  \author[$^1$]{Albert Gu\thanks{Alphabetical by first name.}}
+  \author[$^2$]{Tri Dao\samethanks}
+  \affil[$^1$]{Machine Learning Department, Carnegie Mellon University}
+  \affil[$^2$]{Department of Computer Science, Princeton University}
+  \affil[ ]{{\texttt{agu@cs.cmu.edu}}, {\texttt{tri@tridao.me}}}
+  \date{}
+}{
+  \title{Linear-Time Sequence Modeling with Selective State Spaces}
+}
+
+
+\begin{document}
+
+
+\maketitle
+
+\input{src/abstract}
+
+\input{src/intro}
+
+\input{src/background}
+
+\input{src/method}
+
+\input{src/experiments}
+
+\iftoggle{arxiv}{
+\input{src/discussion}
+}{}
+
+\input{src/conclusion}
+
+\iftoggle{arxiv}{
+\subsubsection*{Acknowledgments}
+
+We thank Karan Goel, Arjun Desai, and Kush Bhatia for helpful feedback on the draft.
+
+}{
+
+}
+
+
+\iftoggle{arxiv}{
+\printbibliography
+}{
+\bibliography{biblio}
+}
+
+
+\newpage
+
+\appendix
+
+\onecolumn
+
+\input{src/related}
+
+\input{src/appendix}
+
+
+\end{document}
