@@ -1,6 +1,6 @@
 {
   "2312.00752": {
-    "last_attempt": "2024-12-30T07:00:33.974270+00:00",
-    "error": "Pandoc conversion failed: [WARNING] Undefined toggle 'arxiv' at /tmp/tmpapm04x5s/main.tex line 156 column 4\nError at \"/tmp/tmpapm04x5s/main.tex\" (line 158, column 1):\nunexpected ()\n\\input{src/conclusion}\n^"
+    "last_attempt": "2024-12-30T12:22:11.273107+00:00",
+    "error": "Pandoc conversion failed: [WARNING] Undefined toggle 'arxiv' at /tmp/tmptne_wwgx/main.tex line 156 column 4\nError at \"/tmp/tmptne_wwgx/main.tex\" (line 158, column 1):\nunexpected ()\n\\input{src/conclusion}\n^"
   }
 }
