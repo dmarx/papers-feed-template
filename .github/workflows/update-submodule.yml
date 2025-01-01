@@ -1,0 +1,26 @@
+# .github/workflows/update-submodule.yml
+name: Update Submodule
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  push:
+    paths: "./.github/workflows/update-submodule.yml"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Update submodule
+        run: |
+          git submodule update --recursive --remote
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update submodule papers-feed-src"
+          file_pattern: 'papers-feed-src'
