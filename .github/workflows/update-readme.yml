@@ -1,0 +1,39 @@
+name: Update README from Submodule
+
+on:
+  workflow_run:
+    workflows: ["update-submodule.yaml"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          
+      - name: Update README
+        run: |
+          cp papers-feed-src/README.md README.md
+          
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git diff --quiet README.md || echo "has_changes=true" >> $GITHUB_OUTPUT
+          
+      - name: Commit and push if changed
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add README.md
+          git commit -m "docs: update README from submodule [skip ci]"
+          git push
