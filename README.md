@@ -1,12 +1,18 @@
 # Research Paper Visit/Reading Monitor and Feed
 
-System which monitors what I'm reading via a browser extension and publishes a feed: https://dmarx.github.io/papers-feed/
+System which passively monitors what you're reading via a browser extension and publishes a feed via gh-pages.
+
+Example feed: https://dmarx.github.io/papers-feed/
 
 # How it works
 
-1. Browser extension monitors your reading habits
-2. Interactions with domains you are interested in get logged as github issues
-3. This triggers github automation workflows which publishes an interactive webpage to dig up papers
+1. Browser extension monitors your reading habits.
+2. Interactions with domains you are interested in get logged as github issues. Whole separate project for this cursed use of gh-issues here: https://github.com/dmarx/gh-store
+   * Domains supported out of the box:
+     * arxiv
+     * openreview
+   * Can also manually trigger extension to log any page via a popup
+4. Github automation workflows update an interactive webpage.
 
 # How to set this up to monitor your own reading
 
@@ -19,7 +25,7 @@ System which monitors what I'm reading via a browser extension and publishes a f
 5. Register the PAT in the browser extension's options
 
 To test that everything is set up correctly, visit an arxiv `/abs/` or `/pdf/` page. Shortly after visiting:
-  * an issue with the label "paper" should be created
+  * an issue with a bunch of labels should be created
   * this should also trigger activity which will be logged in the repository's `Actions` tab
   * after a few minutes, the frontend should be available via gh-pages at `<username>.github.io/<repo-name>`
 
