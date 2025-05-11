@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<!-- index.html - Root of GitHub Pages site -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DigThatData Papers Feed</title>
+  
+  <!-- Tabulator CSS and JS -->
+  <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+  
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <link rel="stylesheet" href="papersfeed.css">
+</head>
+<body>
+  <div class="header">
+    <div class="header-title">
+        <h1>ArXiv Paper Feed</h1>
+        <p class="header-desc">Papers recently visited by <a href="https://bsky.app/profile/digthatdata.bsky.social">@DigThatData</a></p>
+    </div>
+
+    <div class="controls">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search papers by title, author, or content...">
+      </div>
+      <button class="filter-button" id="sidebar-toggle">
+        <i class="fas fa-filter"></i> Filters
+      </button>
+    </div>
+  </div>
+  
+  <div class="dashboard-container">
+    <div class="main-content">
+      <div id="papers-table">
+        <div class="loading">Loading papers data...</div>
+      </div>
+    </div>
+    
+    <!-- Filter Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <h3>Filters</h3>
+      
+      <div class="filter-section">
+        <h4>Publication Date</h4>
+        <div id="date-filter-controls">
+          <div>
+            <label for="date-filter-from">From:</label>
+            <input type="date" id="date-filter-from">
+          </div>
+          <div style="margin-top: 10px;">
+            <label for="date-filter-to">To:</label>
+            <input type="date" id="date-filter-to">
+          </div>
+          <div style="margin-top: 15px;">
+            <button id="apply-date-filter" class="filter-button">Apply</button>
+            <button id="clear-date-filter" class="filter-button">Clear</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="filter-section">
+        <h4>Reading Status</h4>
+        <div>
+          <label>
+            <input type="checkbox" id="filter-read" checked> Show Read Papers
+          </label>
+        </div>
+        <div>
+          <label>
+            <input type="checkbox" id="filter-unread" checked> Show Unread Papers
+          </label>
+        </div>
+      </div>
+      
+      <div class="filter-section">
+        <h4>Reading Time</h4>
+        <div>
+          <label for="min-reading-time">Minimum (minutes):</label>
+          <input type="number" id="min-reading-time" min="0" step="1">
+        </div>
+        <div style="margin-top: 10px;">
+          <button id="apply-reading-filter" class="filter-button">Apply</button>
+          <button id="clear-reading-filter" class="filter-button">Clear</button>
+        </div>
+      </div>
+      
+      <div class="filter-section">
+        <h4>Interaction Days</h4>
+        <div>
+          <label for="min-interaction-days">Minimum days:</label>
+          <input type="number" id="min-interaction-days" min="0" step="1">
+        </div>
+        <div style="margin-top: 10px;">
+          <button id="apply-days-filter" class="filter-button">Apply</button>
+          <button id="clear-days-filter" class="filter-button">Clear</button>
+        </div>
+      </div>
+      
+      <div class="filter-section">
+        <h4>Reset All Filters</h4>
+        <button id="reset-all-filters" class="filter-button">Reset All</button>
+      </div>
+    </div>
+    
+    <!-- Details Sidebar (new) -->
+    <div class="sidebar" id="details-sidebar">
+      <div id="details-content"></div>
+    </div>
+  </div>
+  
+  <button id="filter-toggle-btn" title="Toggle Filters">
+    <i class="fas fa-filter"></i>
+  </button>
+
+  <script src="papersfeed.js"></script>
+</body>
+</html>

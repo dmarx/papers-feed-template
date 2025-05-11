@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      width: 400px;
+      padding: 15px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .paper-info {
+      margin-bottom: 15px;
+    }
+    .paper-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .paper-authors {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .rating-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    button {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button:not(:disabled):hover {
+      background: #e5e5e5;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #666;
+      padding: 8px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      text-align: center;
+    }
+    /* New styles for manual logging UI */
+    .manual-log-section {
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid #eee;
+      display: none; /* Hidden by default, shown when no paper detected */
+    }
+    .manual-log-section h3 {
+      font-size: 14px;
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+    .log-button {
+      width: 100%;
+      padding: 10px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+    .log-button:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+  <div id="currentPaper" class="paper-info">
+    <div id="paperTitle" class="paper-title">Loading...</div>
+    <div id="paperAuthors" class="paper-authors"></div>
+    <div class="rating-buttons">
+      <button id="thumbsUp" disabled>👍 Interesting</button>
+      <button id="thumbsDown" disabled>👎 Not Relevant</button>
+    </div>
+    <div id="status" class="status">Loading paper details...</div>
+  </div>
+  
+  <!-- New section for manually logging a paper with one-click -->
+  <div id="manualLogSection" class="manual-log-section">
+    <h3>This page is not tracked as a paper</h3>
+    <button id="logPageButton" class="log-button">Track This Page</button>
+  </div>
+  
+  <script src="dist/popup.bundle.js"></script>
+</body>
+</html>

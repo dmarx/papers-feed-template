@@ -1,0 +1,46 @@
+name: Store Sync
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [reopened]
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  process-updates:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'stored-object')
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: pip install gh-store
+          
+      - name: Process Updates
+        run: |
+          python -m gh_store process-updates \
+            --issue ${{ github.event.issue.number }} \
+            --token ${{ secrets.GITHUB_TOKEN }} \
+            --repo ${{ github.repository }}
+
+  notify-deploy:
+    needs: process-updates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger frontend deploy
+        run: |
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/2_deploy-frontend.yml/dispatches \
+            -d "{\"ref\":\"${{ github.ref }}\"}"

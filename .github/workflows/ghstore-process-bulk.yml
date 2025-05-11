@@ -1,0 +1,84 @@
+# .github/workflows/ghstore-process-bulk.yml
+name: Process Bulk Object Updates
+
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: 'Label to process (default: stored-object)'
+        required: true
+        type: string
+        default: 'stored-object'
+
+jobs:
+  process-updates:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write 
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gh-store rich loguru
+
+      - name: Process Updates
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          LABEL: ${{ inputs.label }}
+        run: |
+          python - << 'EOF'
+          import os
+          from github import Github
+          from gh_store.__main__ import CLI
+          from loguru import logger
+          from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+
+          # Initialize GitHub client
+          g = Github(os.environ["GITHUB_TOKEN"])
+          repo = g.get_repo(os.environ["REPO"])
+          label = os.environ["LABEL"]
+
+          # Get all open issues with the specified label
+          logger.info(f"Finding open issues with label: {label}")
+          open_issues = list(repo.get_issues(state="open", labels=[label]))
+
+          if not open_issues:
+              logger.warning("No open issues found with specified label")
+              exit(0)
+
+          logger.info(f"Found {len(open_issues)} issues to process")
+
+          # Initialize CLI
+          cli = CLI()
+
+          # Create progress bar
+          with Progress(
+              SpinnerColumn(),
+              TextColumn("[bold blue]{task.description}"),
+              BarColumn(),
+              TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+          ) as progress:
+              process_task = progress.add_task(
+                  "Processing issues...",
+                  total=len(open_issues)
+              )
+
+              for issue in open_issues:
+                  logger.info(f"Processing issue #{issue.number}")
+                  cli.process_updates(
+                      issue=issue.number,
+                      token=os.environ["GITHUB_TOKEN"],
+                      repo=os.environ["REPO"]
+                  )
+                  progress.update(process_task, advance=1)
+
+          logger.info("Bulk processing completed")
+          EOF

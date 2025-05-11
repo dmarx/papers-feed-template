@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Academic Paper Tracker",
+  "version": "2.0",
+  "description": "Track and annotate academic papers from various sources",
+  "permissions": [
+    "tabs",
+    "storage",
+    "webNavigation",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://*.arxiv.org/*", 
+    "*://export.arxiv.org/*",
+    "*://*.openreview.net/*",
+    "*://api.github.com/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "dist/background.bundle.js",
+    "type": "module"
+  },
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": ["dist/content-script.js"],
+    "run_at": "document_end",
+    "type": "module"
+  }],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  }
+}

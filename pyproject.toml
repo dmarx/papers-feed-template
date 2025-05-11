@@ -1,0 +1,68 @@
+[project]
+name = "papers-feed"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.11"
+# dependencies = [
+#    "papers_feed"
+# ]
+readme = "README.md"
+license = {file = "LICENSE"}
+
+
+[tool.summary]
+max_file_size_kb = 500  # Skip files larger than 1MB
+
+# File patterns to exclude
+exclude_patterns = [
+    '.git',
+    '.gitignore',
+    '.pytest_cache',
+    '__pycache__',
+    'SUMMARY',
+    '.coverage',
+    '.env',
+    '.venv',
+    '.idea',
+    '.vscode',
+    'README.md',
+    'README_LLM.md',
+    'package-lock.json',
+    'REGISTRY.md',
+    'research.yaml',
+    'registry.yaml',
+    'bibliography',
+    '.bibtex',
+    'metadata.json',
+    'events.log',
+    'papers.yaml'
+]
+
+# File extensions to include
+include_extensions = [
+    '.py',
+    '.md',
+    '.txt',
+    '.yml',
+    '.yaml',
+    '.toml',
+    '.json',
+    '.html',
+    '.css',
+    '.js',
+    '.ts',
+    '.tsx',
+    '.j2'
+]
+
+# Directories to exclude
+exclude_directories = [
+    '.git',
+    '__pycache__',
+    '.pytest_cache',
+    '.venv',
+    '.idea',
+    '.vscode',
+    'data',
+    'extension/dist/'
+]

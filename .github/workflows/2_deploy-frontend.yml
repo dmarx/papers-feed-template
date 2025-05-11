@@ -1,0 +1,139 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'data/papers/gh-store-snapshot.json'
+      - 'frontend/*'
+      - '.github/workflows/2_deploy-frontend.yml'
+
+concurrency:
+  group: store-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  actions: read
+
+jobs:
+  update-snapshot:
+    runs-on: ubuntu-latest
+    outputs:
+      changes_detected: ${{ steps.commit-changes.outputs.changes_detected }}
+    steps:
+      - name: Wait for updates
+        uses: actions/github-script@v7
+        with:
+          script: |
+            while (true) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: '1_store-sync.yml',
+              });
+              
+              const activeUpdates = runs.data.workflow_runs.filter(run => 
+                (run.status === 'in_progress' || run.status === 'queued')
+              );
+              
+              if (activeUpdates.length === 0) break;
+              console.log(`Waiting for ${activeUpdates.length} active updates to complete...`);
+              await new Promise(r => setTimeout(r, 10000));
+            }
+
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: pip install gh-store
+
+      - name: Update snapshot
+        env:
+          SNAPSHOT_PATH: data/papers/gh-store-snapshot.json
+        run: |
+          mkdir -p $(dirname ${{ env.SNAPSHOT_PATH }})
+          python -m gh_store update-snapshot \
+            --token ${{ secrets.GITHUB_TOKEN }} \
+            --repo ${{ github.repository }} \
+            --snapshot-path ${{ env.SNAPSHOT_PATH }}
+      
+      # - name: Convert data
+      #   run: |
+      #     python frontend/scripts/convert_store.py \
+      #       --snapshot_path data/papers/gh-store-snapshot.json \
+      #       --output_path data/papers/papers.json \
+      #       --archive_path data/papers/papers-archive.json \
+      #       --features_base data/papers
+
+      - name: Upload papers data
+        uses: actions/upload-artifact@v4
+        with:
+          name: papers-json
+          path: data/papers/gh-store-snapshot.json
+
+      - name: Commit changes
+        id: commit-changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: Update store snapshot [${{ github.run_id }}]"
+          file_pattern: 'data/papers/**'
+      
+  deploy:
+    needs: update-snapshot
+    if: github.event_name == 'workflow_dispatch' || needs.update-snapshot.outputs.changes_detected == 'true'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Download papers.json
+        uses: actions/download-artifact@v4
+        with:
+          name: papers-json
+          path: web/
+
+      - name: Build web directory
+        run: |
+          cp frontend/* web/
+          
+          # Copy paper features maintaining directory structure
+          cd data
+          if [ -d "papers" ]; then
+            # Create papers directory in web/data
+            mkdir -p ../web/data/papers
+            
+            # Find all markdown files under papers/*/features
+            # and copy them maintaining directory structure
+            find papers -type f -name "*.md" -path "*/features/*" -exec cp --parents {} ../web/data/ \;
+          fi
+          cd ..
+
+      - name: Get git info
+        id: git-info
+        run: |
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "repo=${GITHUB_REPOSITORY}" >> $GITHUB_OUTPUT
+
+      - name: Create git info JSON
+        run: |
+          echo "{\"branch\": \"${{ steps.git-info.outputs.branch }}\", \"commit\": \"${{ steps.git-info.outputs.commit }}\", \"repo\": \"${{ steps.git-info.outputs.repo }}\"}" > web/data/git-info.json
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./web
+          force_orphan: true

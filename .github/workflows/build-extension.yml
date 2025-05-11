@@ -1,0 +1,94 @@
+# .github/workflows/build-extension.yml
+name: Build Extension
+
+on:
+  push:
+    paths:
+      - 'extension/**'
+      - '.github/workflows/build-extension.yml'
+    branches: [ main, ext-use-gh-store ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    # Generate package-lock.json if it doesn't exist
+    # - name: Initialize npm
+    #   run: |
+    #     if [ ! -f "package-lock.json" ]; then
+    #       npm install --package-lock-only --no-audit
+    #     else
+    #       echo "package-lock.json exists"
+    #     fi
+    
+    # Regenerate package-lock.json to ensure it matches package.json
+    - name: Regenerate package-lock.json
+      run: |
+        if [ -f "package-lock.json" ]; then
+          rm -f package-lock.json
+        fi
+        npm install --package-lock-only --no-audit
+
+    - name: Flush old build
+      run: rm -rf dist/
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        #cache: 'npm'
+        #cache-dependency-path: './extension/package-lock.json'
+        
+    - name: Install dependencies
+      #run: npm ci --prefer-offline
+      run: npm install --prefer-offline
+        
+      
+    - name: Show environment info
+      run: |
+        echo "Node version:"
+        node --version
+        echo "NPM version:"
+        npm --version
+        echo "Directory structure:"
+        ls -R
+        echo "package.json contents:"
+        cat package.json
+        
+    - name: Type check
+      run: npm run type-check
+        
+    - name: Build extension
+      run: |
+        set -ex
+        npm run build
+        echo "Build output:"
+        ls -la dist/
+
+    # Debug output
+    - name: Show build results
+      if: always()
+      run: |
+        echo "Current directory:"
+        pwd
+        echo "Directory contents:"
+        ls -lha
+        echo "Dist directory contents (if exists):"
+        ls -lha dist/ || echo "No dist directory"
+        echo "Error logs (if any):"
+        find . -name "*.log" -exec cat {} \;
+
+    # Commit the built files
+    - name: Commit bundled files
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        commit_message: "chore: Update extension bundles"
+        file_pattern: "extension/dist/*"
+        #branch: ${{ github.ref }}

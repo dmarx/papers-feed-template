@@ -1,0 +1,119 @@
+# .github/workflows/deduplicate.yml
+# Workflow to automatically find and deduplicate objects in gh-store
+
+
+name: Deduplicate GH-Store Objects
+
+on:
+  # schedule:
+  #   - cron: '0 2 * * *' # Run daily at 2:00 UTC
+  # push:
+  #   branches: [ canonicalizer-newlabels ]
+  #   paths: [ ".github/workflows/deduplicate.yml" ]
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (no changes)'
+        type: boolean
+        default: true
+      specific_object:
+        description: 'Process specific object ID only (leave blank for all)'
+        type: string
+        required: false
+
+jobs:
+  deduplicate:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write  # Needed to modify issues
+      contents: read  # Needed to read code
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gh-store
+      
+      - name: Run deduplication tool
+        id: deduplicate
+        run: |
+          echo "Running deduplication process..."
+          
+          # Set up basic command
+          CMD="python -m gh_store.tools.canonicalize --token ${{ secrets.GITHUB_TOKEN }} --repo ${{ github.repository }}"
+          
+          # Check if dry run
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            CMD="$CMD --dry-run"
+            echo "::notice::Running in dry-run mode - no changes will be made"
+          fi
+          
+          # Check if specific object requested
+          if [[ "${{ github.event.inputs.specific_object }}" != "" ]]; then
+            OBJECT_ID="${{ github.event.inputs.specific_object }}"
+            CMD="$CMD --object-id $OBJECT_ID"
+            echo "::notice::Processing specific object: $OBJECT_ID"
+          fi
+          
+          # First find duplicates and capture output
+          echo "Finding duplicates..."
+          FIND_OUTPUT=$(eval "$CMD --find-duplicates" 2>&1)
+          echo "$FIND_OUTPUT"
+          
+          # Check if duplicates found
+          if [[ "$FIND_OUTPUT" == *"No duplicate objects found"* ]]; then
+            echo "::notice::No duplicate objects found!"
+            echo "duplicates_found=false" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "duplicates_found=true" >> $GITHUB_OUTPUT
+          fi
+          
+          # Process duplicates
+          echo "Processing duplicates..."
+          DEDUP_OUTPUT=$(eval "$CMD --deduplicate" 2>&1)
+          echo "$DEDUP_OUTPUT"
+          
+          # Extract metrics
+          OBJECTS_PROCESSED=$(echo "$DEDUP_OUTPUT" | grep -o "Processed [0-9]* objects" | grep -o "[0-9]*")
+          if [[ -z "$OBJECTS_PROCESSED" ]]; then
+            OBJECTS_PROCESSED=0
+          fi
+          
+          echo "objects_processed=$OBJECTS_PROCESSED" >> $GITHUB_OUTPUT
+      
+      - name: Create summary
+        if: steps.deduplicate.outputs.duplicates_found == 'true'
+        run: |
+          echo "# Deduplication Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "**DRY RUN** - No changes were made" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "Found duplicates for ${{ steps.deduplicate.outputs.objects_processed }} objects" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The deduplication process:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Identified objects with multiple issues" >> $GITHUB_STEP_SUMMARY
+          echo "2. Selected the oldest issue as canonical for each object" >> $GITHUB_STEP_SUMMARY
+          echo "3. Marked other issues as deprecated duplicates" >> $GITHUB_STEP_SUMMARY
+          echo "4. Processed virtual merges to ensure data consistency" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Handle no duplicates
+        if: steps.deduplicate.outputs.duplicates_found == 'false'
+        run: |
+          echo "# Deduplication Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ No duplicate objects found in the repository." >> $GITHUB_STEP_SUMMARY

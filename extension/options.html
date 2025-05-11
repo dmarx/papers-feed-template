@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ArXiv Tracker Settings</title>
+  <style>
+    body {
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    .field {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    input[type="text"],
+    input[type="password"],
+    input[type="number"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    input[type="number"] {
+      width: 100px;
+    }
+    .help-text {
+      font-size: 0.9em;
+      color: #666;
+      margin-top: 4px;
+    }
+    .status {
+      margin-top: 16px;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    .success {
+      background: #e6ffe6;
+      color: #006600;
+    }
+    .error {
+      background: #ffe6e6;
+      color: #660000;
+    }
+    button {
+      background: #0366d6;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 16px;
+    }
+    button:hover {
+      background: #0255b3;
+    }
+    .section {
+      margin-bottom: 32px;
+    }
+    .section-title {
+      font-size: 1.2em;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+    .checkbox-field {
+      margin-top: 12px;
+    }
+    .checkbox-field label {
+      display: flex;
+      align-items: center;
+      font-weight: normal;
+    }
+    .checkbox-field input[type="checkbox"] {
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>ArXiv Tracker Settings</h2>
+    
+    <div class="section">
+      <div class="section-title">GitHub Integration</div>
+      <div class="field">
+        <label for="repo">GitHub Repository</label>
+        <input type="text" id="repo" placeholder="username/repository">
+        <div class="help-text">Format: username/repository (e.g., johndoe/arxiv-tracker)</div>
+      </div>
+
+      <div class="field">
+        <label for="token">GitHub Personal Access Token</label>
+        <input type="password" id="token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+        <div class="help-text">
+          Token needs 'repo' scope for private repositories.<br>
+          Never share this token with anyone.
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Reading Session Settings</div>
+      
+      <div class="field">
+        <label for="idleThreshold">Idle Threshold (minutes)</label>
+        <input type="number" id="idleThreshold" min="1" max="60" value="5">
+        <div class="help-text">
+          Time of inactivity before session is paused (1-60 minutes).<br>
+          Default: 5 minutes
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="minDuration">Minimum Session Duration (seconds)</label>
+        <input type="number" id="minDuration" min="10" max="300" value="30">
+        <div class="help-text">
+          Minimum time required to log a reading session (10-300 seconds).<br>
+          Default: 30 seconds
+        </div>
+      </div>
+
+      <div class="checkbox-field">
+        <label>
+          <input type="checkbox" id="requireContinuous">
+          Require Continuous Activity
+        </label>
+        <div class="help-text">
+          When enabled, resets the session timer if you're idle for too long.<br>
+          Default: Enabled
+        </div>
+      </div>
+
+      <div class="checkbox-field">
+        <label>
+          <input type="checkbox" id="logPartial">
+          Log Partial Sessions
+        </label>
+        <div class="help-text">
+          When enabled, logs sessions even if they're shorter than the minimum duration.<br>
+          Default: Disabled
+        </div>
+      </div>
+    </div>
+
+    <button id="save">Save Settings</button>
+    <div id="status" class="status"></div>
+  </div>
+  <script type="module" src="dist/options.bundle.js"></script>
+</body>
+</html>
