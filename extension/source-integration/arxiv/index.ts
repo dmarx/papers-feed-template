@@ -27,10 +27,6 @@ class ArxivMetadataExtractor extends MetadataExtractor {
       return this.apiMetadata.title;
     }
     
-    // arXiv-specific selectors
-    //const arxivTitle = this.document.querySelector('.title.mathjax')?.textContent?.trim();
-    
-    //return arxivTitle || super.extractTitle();
     return super.extractTitle();
   }
   
@@ -139,9 +135,9 @@ export class ArXivIntegration extends BaseSourceIntegration {
   ];
   
   // Content script matches
-  readonly contentScriptMatches = [
-    "*://*.arxiv.org/*"
-  ];
+  // readonly contentScriptMatches = [
+  //   "*://*.arxiv.org/*"
+  // ];
 
   // ArXiv API endpoint
   private readonly API_BASE_URL = 'https://export.arxiv.org/api/query';

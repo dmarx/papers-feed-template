@@ -101,11 +101,6 @@ export class OpenReviewIntegration extends BaseSourceIntegration {
     /openreview\.net\/forum\?id=([a-zA-Z0-9]+)/,
     /openreview\.net\/pdf\?id=([a-zA-Z0-9]+)/
   ];
-  
-  // Content script matches
-  readonly contentScriptMatches = [
-    "*://*.openreview.net/*"
-  ];
 
   /**
    * Extract paper ID from URL
