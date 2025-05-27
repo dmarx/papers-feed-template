@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- index.html - Root of GitHub Pages site -->
+<!-- frontend/index.html - Root of GitHub Pages site -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -9,6 +9,9 @@
   <!-- Tabulator CSS and JS -->
   <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
   <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+
+  <!-- D3.js for color scales -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
   
   <!-- Font Awesome for icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
@@ -17,17 +20,41 @@
 <body>
   <div class="header">
     <div class="header-title">
-        <h1>ArXiv Paper Feed</h1>
-        <p class="header-desc">Papers recently visited by <a href="https://bsky.app/profile/digthatdata.bsky.social">@DigThatData</a></p>
+        <h1>What I Am Reading</h1>
+        <p class="header-desc">By <a href="https://bsky.app/profile/digthatdata.bsky.social">@DigThatData</a>. Learn more <a href="https://github.com/dmarx/papers-feed-template">here</a>.</p>
+    </div>
+
+    <div class="heatmap-container">
+      <div class="heatmap-title">Reading Activity (Papers per day)</div>
+      <div id="reading-heatmap"></div>
+      <div class="heatmap-legend">
+        <span>Less</span>
+        <div class="legend-cell" style="background-color: #ebedf0;"></div>
+        <div class="legend-cell" style="background-color: #c6e48b;"></div>
+        <div class="legend-cell" style="background-color: #7bc96f;"></div>
+        <div class="legend-cell" style="background-color: #239a3b;"></div>
+        <div class="legend-cell" style="background-color: #196127;"></div>
+        <span>More</span>
+      </div>
     </div>
 
     <div class="controls">
       <div class="search-box">
         <input type="text" id="search-input" placeholder="Search papers by title, author, or content...">
+        <button class="clear-search-btn" id="clear-search" title="Clear search">×</button>
       </div>
       <button class="filter-button" id="sidebar-toggle">
         <i class="fas fa-filter"></i> Filters
       </button>
+    </div>
+  </div>
+
+  <!-- Filter Status Bar -->
+  <div class="filter-status-bar" id="filter-status-bar" style="display: none;">
+    <div class="filter-status-content">
+      <span class="filter-status-label">Active filters:</span>
+      <div class="filter-badges" id="filter-badges"></div>
+      <button class="clear-all-filters-btn" id="clear-all-filters">Clear All</button>
     </div>
   </div>
   
@@ -61,20 +88,6 @@
       </div>
       
       <div class="filter-section">
-        <h4>Reading Status</h4>
-        <div>
-          <label>
-            <input type="checkbox" id="filter-read" checked> Show Read Papers
-          </label>
-        </div>
-        <div>
-          <label>
-            <input type="checkbox" id="filter-unread" checked> Show Unread Papers
-          </label>
-        </div>
-      </div>
-      
-      <div class="filter-section">
         <h4>Reading Time</h4>
         <div>
           <label for="min-reading-time">Minimum (minutes):</label>
@@ -104,9 +117,11 @@
       </div>
     </div>
     
-    <!-- Details Sidebar (new) -->
     <div class="sidebar" id="details-sidebar">
-      <div id="details-content"></div>
+      <button class="close-button" onclick="hideDetails()">×</button>
+      <div class="details-scroll-content">
+        <div id="details-content"></div>
+      </div>
     </div>
   </div>
   
