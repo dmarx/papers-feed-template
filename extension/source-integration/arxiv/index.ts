@@ -139,9 +139,9 @@ export class ArXivIntegration extends BaseSourceIntegration {
   ];
   
   // Content script matches
-  readonly contentScriptMatches = [
-    "*://*.arxiv.org/*"
-  ];
+  // readonly contentScriptMatches = [
+  //   "*://*.arxiv.org/*"
+  // ];
 
   // ArXiv API endpoint
   private readonly API_BASE_URL = 'https://export.arxiv.org/api/query';
