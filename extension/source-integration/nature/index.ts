@@ -90,11 +90,6 @@ export class NatureIntegration extends BaseSourceIntegration {
     /nature\.com\/articles\/([^?]+)/,
   ];
 
-  // Content script matches  
-  // readonly contentScriptMatches = [
-  //   "*://*.nature.com/articles/*"
-  // ];
-
   /**
    * Extract paper ID from URL
    */
