@@ -3,6 +3,367 @@
 let table;
 let allData = [];
 let currentDetailsPaper = null;
+let readingTimeColorScale = null;
+let interactionDaysColorScale = null;
+let readingActivityData = [];
+
+// Filter Manager for unified filter state
+class FilterManager {
+  constructor(table) {
+    this.table = table;
+    this.filters = new Map(); // name -> {fn, description}
+    this.listeners = new Set();
+  }
+  
+  setFilter(name, filterFunction, description) {
+    this.filters.set(name, { fn: filterFunction, desc: description });
+    this.applyFilters();
+    this.notifyListeners();
+  }
+  
+  removeFilter(name) {
+    this.filters.delete(name);
+    this.applyFilters();
+    this.notifyListeners();
+  }
+  
+  clearAll() {
+    this.filters.clear();
+    this.applyFilters();
+    this.notifyListeners();
+  }
+  
+  applyFilters() {
+    if (this.filters.size === 0) {
+      this.table.clearFilter();
+    } else {
+      this.table.setFilter((data) => {
+        return Array.from(this.filters.values())
+          .every(filter => filter.fn(data));
+      });
+    }
+    
+    // Update heatmap with filtered data
+    this.updateHeatmap();
+  }
+  
+  updateHeatmap() {
+    // If viewing paper details, show only that paper's activity
+    if (currentDetailsPaper) {
+      const singlePaperActivity = extractReadingActivityData([currentDetailsPaper]);
+      createReadingHeatmap(singlePaperActivity);
+      return;
+    }
+    
+    // Otherwise, get currently filtered data from the table
+    const filteredData = this.table.getData("active");
+    console.log("Updating heatmap with", filteredData.length, "filtered papers");
+    
+    // Extract reading activity from filtered data
+    const filteredActivityData = extractReadingActivityData(filteredData);
+    
+    // Recreate the heatmap with filtered data
+    createReadingHeatmap(filteredActivityData);
+  }
+  
+  getActiveFilters() {
+    return Array.from(this.filters.entries())
+      .map(([name, {desc}]) => ({name, description: desc}));
+  }
+  
+  addListener(callback) {
+    this.listeners.add(callback);
+  }
+  
+  removeListener(callback) {
+    this.listeners.delete(callback);
+  }
+  
+  notifyListeners() {
+    this.listeners.forEach(callback => callback());
+  }
+}
+
+// Filter Status Bar UI Component
+class FilterStatusBar {
+  constructor(filterManager) {
+    this.filterManager = filterManager;
+    this.container = document.getElementById('filter-status-bar');
+    this.badgeContainer = document.getElementById('filter-badges');
+    this.clearAllBtn = document.getElementById('clear-all-filters');
+    
+    // Listen for filter changes
+    this.filterManager.addListener(() => this.render());
+    
+    // Set up clear all button
+    this.clearAllBtn.addEventListener('click', () => {
+      this.filterManager.clearAll();
+    });
+  }
+  
+  render() {
+    const activeFilters = this.filterManager.getActiveFilters();
+    
+    if (activeFilters.length === 0) {
+      this.container.style.display = 'none';
+      return;
+    }
+    
+    this.container.style.display = 'block';
+    this.badgeContainer.innerHTML = '';
+    
+    activeFilters.forEach(({name, description}) => {
+      const badge = this.createFilterBadge(name, description);
+      this.badgeContainer.appendChild(badge);
+    });
+  }
+  
+  createFilterBadge(name, description) {
+    const badge = document.createElement('div');
+    badge.className = 'filter-badge';
+    
+    // Add preview styling for search preview
+    if (name === 'search-preview') {
+      badge.classList.add('preview');
+    }
+    
+    const text = document.createElement('span');
+    text.textContent = description;
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'filter-badge-remove';
+    removeBtn.innerHTML = '×';
+    removeBtn.title = `Remove ${description} filter`;
+    removeBtn.addEventListener('click', () => {
+      this.filterManager.removeFilter(name);
+      
+      // If removing search preview, also clear the input
+      if (name === 'search-preview') {
+        document.getElementById("search-input").value = "";
+        currentPreviewSearchTerm = null;
+      }
+    });
+    
+    badge.appendChild(text);
+    badge.appendChild(removeBtn);
+    
+    return badge;
+  }
+}
+
+// Global filter manager instance
+let filterManager;
+let filterStatusBar;
+
+// Extract reading activity data from interaction data
+function extractReadingActivityData(data) {
+  const dailyActivity = new Map();
+  
+  data.forEach(paper => {
+    if (paper.rawInteractionData && paper.rawInteractionData.length > 0) {
+      paper.rawInteractionData.forEach(interaction => {
+        if (interaction.type === "reading_session" && interaction.timestamp) {
+          const date = new Date(interaction.timestamp);
+          const dateStr = d3.timeFormat("%Y-%m-%d")(date);
+          
+          if (!dailyActivity.has(dateStr)) {
+            dailyActivity.set(dateStr, new Set());
+          }
+          dailyActivity.get(dateStr).add(paper.paperKey);
+        }
+      });
+    }
+  });
+  
+  // Convert to array format with unique paper counts
+  const result = Array.from(dailyActivity.entries()).map(([dateStr, paperSet]) => ({
+    date: new Date(dateStr),
+    count: paperSet.size
+  }));
+  
+  return result.sort((a, b) => a.date - b.date);
+}
+
+// Create reading activity heatmap
+function createReadingHeatmap(data) {
+  const container = d3.select("#reading-heatmap");
+  container.selectAll("*").remove(); // Clear existing content
+  
+  // Update heatmap title based on context
+  const titleElement = document.querySelector('.heatmap-title');
+  if (currentDetailsPaper) {
+    titleElement.textContent = `Reading Activity: ${currentDetailsPaper.title.substring(0, 50)}${currentDetailsPaper.title.length > 50 ? '...' : ''}`;
+  } else {
+    titleElement.textContent = "Reading Activity (Papers per day)";
+  }
+  
+  if (!data || data.length === 0) {
+    container.append("div")
+      .style("text-align", "center")
+      .style("color", "#666")
+      .style("font-size", "12px")
+      .style("padding", "20px")
+      .text(currentDetailsPaper ? "No reading sessions for this paper" : "No reading activity data available");
+    return;
+  }
+  
+  // Calculate date range - 8 months back, ending today
+  const endDateTime = new Date();
+  endDateTime.setHours(23, 59, 59, 999); // End of today
+  
+  const startDateTime = new Date(endDateTime);
+  startDateTime.setMonth(startDateTime.getMonth() - 8);
+  startDateTime.setHours(0, 0, 0, 0); // Start of day 8 months ago
+  
+  // Calculate the Sunday of the week containing endDateTime (for right alignment)
+  const endSunday = new Date(endDateTime);
+  endSunday.setDate(endDateTime.getDate() - endDateTime.getDay());
+  endSunday.setHours(0, 0, 0, 0);
+  
+  // Calculate how many weeks we need to show
+  const totalWeeks = Math.ceil(d3.timeWeek.count(startDateTime, endSunday)) + 1;
+  
+  // Dimensions
+  const cellSize = 11;
+  const cellGap = 2;
+  const width = totalWeeks * (cellSize + cellGap);
+  const height = 7 * (cellSize + cellGap) + 20; // 7 days + month labels
+  
+  // Create SVG
+  const svg = container
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+  
+  // Create tooltip
+  let tooltip = d3.select("body").select(".heatmap-tooltip");
+  if (tooltip.empty()) {
+    tooltip = d3.select("body")
+      .append("div")
+      .attr("class", "heatmap-tooltip")
+      .style("opacity", 0);
+  }
+  
+  // Process data into a map for quick lookup
+  const dataMap = new Map();
+  data.forEach(d => {
+    const dateStr = d3.timeFormat("%Y-%m-%d")(d.date);
+    dataMap.set(dateStr, d.count);
+  });
+  
+  // Create color scale - GitHub style
+  const maxCount = d3.max(data, d => d.count) || 1;
+  const colorScale = d3.scaleThreshold()
+    .domain([1, Math.ceil(maxCount * 0.25), Math.ceil(maxCount * 0.5), Math.ceil(maxCount * 0.75)])
+    .range(["#ebedf0", "#c6e48b", "#7bc96f", "#239a3b", "#196127"]);
+  
+  // Generate all dates in our range
+  const allDates = d3.timeDays(startDateTime, new Date(endDateTime.getTime() + 24 * 60 * 60 * 1000));
+  
+  // Create cells
+  const cells = svg.selectAll(".heatmap-cell")
+    .data(allDates)
+    .enter()
+    .append("rect")
+    .attr("class", "heatmap-cell")
+    .attr("width", cellSize)
+    .attr("height", cellSize)
+    .attr("x", d => {
+      // Calculate week position relative to the end date (right-aligned)
+      const weeksSinceStart = d3.timeWeek.count(startDateTime, d);
+      return weeksSinceStart * (cellSize + cellGap);
+    })
+    .attr("y", d => {
+      const dayOfWeek = d.getDay();
+      return dayOfWeek * (cellSize + cellGap) + 20; // Offset for month labels
+    })
+    .attr("fill", d => {
+      const dateStr = d3.timeFormat("%Y-%m-%d")(d);
+      const count = dataMap.get(dateStr) || 0;
+      return colorScale(count);
+    })
+    .on("mouseover", function(event, d) {
+      const dateStr = d3.timeFormat("%Y-%m-%d")(d);
+      const count = dataMap.get(dateStr) || 0;
+      const formatDate = d3.timeFormat("%B %d, %Y");
+      
+      tooltip.transition()
+        .duration(200)
+        .style("opacity", .9);
+      
+      // Adjust tooltip text based on context
+      const paperText = currentDetailsPaper 
+        ? (count > 0 ? "Read this paper" : "No activity") 
+        : `${count} paper${count !== 1 ? 's' : ''} read`;
+      
+      tooltip.html(`
+        <div><strong>${formatDate(d)}</strong></div>
+        <div>${paperText}</div>
+      `)
+        .style("left", (event.pageX + 10) + "px")
+        .style("top", (event.pageY - 28) + "px");
+    })
+    .on("mouseout", function(d) {
+      tooltip.transition()
+        .duration(500)
+        .style("opacity", 0);
+    })
+    .on("click", function(event, d) {
+      // Only allow filtering when not viewing paper details
+      if (currentDetailsPaper) {
+        return; // Disable click filtering when viewing single paper
+      }
+      
+      // Filter table to show papers read on this date
+      const dateStr = d3.timeFormat("%Y-%m-%d")(d);
+      const count = dataMap.get(dateStr) || 0;
+      
+      if (count > 0) {
+        const formatDate = d3.timeFormat("%B %d, %Y");
+        const dateFilter = function(data) {
+          if (!data.rawInteractionData || data.rawInteractionData.length === 0) return false;
+          
+          return data.rawInteractionData.some(interaction => {
+            if (interaction.type === "reading_session" && interaction.timestamp) {
+              const interactionDateStr = d3.timeFormat("%Y-%m-%d")(new Date(interaction.timestamp));
+              return interactionDateStr === dateStr;
+            }
+            return false;
+          });
+        };
+        
+        // Remove any existing heatmap-date filter and add new one
+        filterManager.removeFilter('heatmap-date');
+        filterManager.setFilter('heatmap-date', dateFilter, `Read on ${formatDate(d)}`);
+      }
+    });
+  
+  // Add month labels - only show months that have visible weeks
+  const monthsInRange = d3.timeMonths(startDateTime, endDateTime);
+  svg.selectAll(".month-label")
+    .data(monthsInRange)
+    .enter()
+    .append("text")
+    .attr("class", "month-label")
+    .attr("x", d => {
+      const weeksSinceStart = d3.timeWeek.count(startDateTime, d);
+      return weeksSinceStart * (cellSize + cellGap);
+    })
+    .attr("y", 12)
+    .text(d => d3.timeFormat("%b")(d));
+  
+  // Add day labels (M, W, F)
+  const dayLabels = ["M", "", "W", "", "F", "", ""];
+  svg.selectAll(".day-label")
+    .data(dayLabels)
+    .enter()
+    .append("text")
+    .attr("class", "day-label")
+    .attr("x", -8)
+    .attr("y", (d, i) => i * (cellSize + cellGap) + 20 + cellSize/2 + 3)
+    .attr("text-anchor", "end")
+    .text(d => d);
+}
 
 // Format date to YYYY-MM-DD format
 function formatDate(dateString) {
@@ -11,26 +372,54 @@ function formatDate(dateString) {
   return date.toISOString().split('T')[0]; // YYYY-MM-DD format
 }
 
-// Format reading time from seconds to minutes
-function formatReadingTime(seconds) {
-  if (!seconds || seconds === 0) return 'Not read';
-  const minutes = Math.round(seconds / 60);
-  return minutes + (minutes === 1 ? ' minute' : ' minutes');
-}
-
 // Custom cell formatter for tags
 function formatTags(cell) {
   const tags = cell.getValue();
   if (!tags || !Array.isArray(tags) || tags.length === 0) {
     return '';
   }
-  
   return tags.map(tag => 
     `<span class="tag">${tag}</span>`
   ).join(' ');
 }
 
-// Format interactions for display
+function formatReadingTimeWithColor(cell) {
+  const seconds = cell.getValue();
+  const backgroundColor = readingTimeColorScale(seconds);
+  const textColor = getContrastColor(backgroundColor);
+  const element = cell.getElement();
+  element.style.backgroundColor = backgroundColor;
+  element.style.color = textColor;
+  return seconds;
+}
+
+function formatInteractionDaysWithColor(cell) {
+  const seconds = cell.getValue();
+  const backgroundColor = interactionDaysColorScale(seconds);
+  const textColor = getContrastColor(backgroundColor);
+  const element = cell.getElement();
+  element.style.backgroundColor = backgroundColor;
+  element.style.color = textColor;
+  return seconds;
+}
+
+// Get contrasting text color for readability
+function getContrastColor(rgbColor) {
+  // D3 returns rgb() format, parse it
+  const rgb = rgbColor.match(/\d+/g);
+  if (!rgb) return '#000000';
+  
+  const r = parseInt(rgb[0]);
+  const g = parseInt(rgb[1]); 
+  const b = parseInt(rgb[2]);
+  
+  // Calculate relative luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  
+  // Return black for light backgrounds, white for dark backgrounds
+  return luminance > 0.5 ? '#000000' : '#ffffff';
+}
+
 function formatInteractions(interactions) {
   if (!interactions || interactions.length === 0) {
     return '<p>No reading sessions recorded</p>';
@@ -61,31 +450,28 @@ function formatInteractions(interactions) {
   `;
 }
 
-// Display paper details in the details sidebar
 function displayPaperDetails(paperId) {
   console.log("Displaying details for paper ID:", paperId);
   
-  // Find the paper data
   const paper = allData.find(p => p.paperKey === paperId);
   if (!paper) {
     console.error('Paper not found:', paperId);
     return;
   }
   
-  // Update the current paper
   currentDetailsPaper = paper;
   
-  // Get the details sidebar and content
+  // Update heatmap to show only this paper's activity
+  const singlePaperActivity = extractReadingActivityData([paper]);
+  createReadingHeatmap(singlePaperActivity);
+  
   const detailsSidebar = document.getElementById('details-sidebar');
   const detailsContent = document.getElementById('details-content');
   
-  // Update the content
+  // Content no longer includes close button - it's now fixed in HTML
   detailsContent.innerHTML = `
     <div class="details-header">
       <h2>${paper.title}</h2>
-      <button id="close-details" class="close-button">
-        <i class="fas fa-times"></i>
-      </button>
     </div>
     
     <div class="detail-section">
@@ -141,13 +527,20 @@ function displayPaperDetails(paperId) {
   
   // Show the sidebar
   detailsSidebar.classList.add('active');
+}
+
+function hideDetails() {
+  const detailsSidebar = document.getElementById('details-sidebar');
+  detailsSidebar.classList.remove('active');
+  currentDetailsPaper = null;
   
-  // Set up close button
-  const closeButton = document.getElementById('close-details');
-  if (closeButton) {
-    closeButton.addEventListener('click', function() {
-      detailsSidebar.classList.remove('active');
-    });
+  // Restore heatmap to show filtered data or all data
+  if (filterManager && filterManager.filters.size > 0) {
+    // If filters are active, show filtered data
+    filterManager.updateHeatmap();
+  } else {
+    // If no filters, show all data
+    createReadingHeatmap(readingActivityData);
   }
 }
 
@@ -155,7 +548,7 @@ function removePrefix(string, prefix, sep = ':') {
   if (string.startsWith(prefix + sep)) {
     return string.slice(prefix.length + sep.length);
   }
-  return null; // Return null to indicate no match
+  return null;
 }
 
 function extractObjectId(string, prefix) {
@@ -182,7 +575,21 @@ function extractObjectId(string, prefix) {
 function extractDomain(url) {
   try {
     const urlObj = new URL(url);
-    return urlObj.hostname;
+    let domain = urlObj.hostname;
+    
+    // Remove www. prefix
+    if (domain.startsWith('www.')) {
+      domain = domain.substring(4);
+    }
+    
+    // Remove .com or .org suffix
+    if (domain.endsWith('.com')) {
+      domain = domain.substring(0, domain.length - 4);
+    } else if (domain.endsWith('.org')) {
+      domain = domain.substring(0, domain.length - 4);
+    }
+    
+    return domain;
   } catch (error) {
     // Handle invalid URLs
     console.error("Invalid URL:", error);
@@ -190,7 +597,7 @@ function extractDomain(url) {
   }
 }
 
-// Process complex data structure
+// read and reshape gh-store scnapshot
 function processComplexData(data) {
   const result = [];
   const objects = data.objects;
@@ -244,7 +651,7 @@ function processComplexData(data) {
     const authors = Array.isArray(paperData.authors) ? paperData.authors.join(', ') : (paperData.authors || '');
     const title = paperData.title || '';
     const abstract = paperData.abstract || '';
-    const tags = paperData.arxiv_tags || [];
+    const tags = paperData.tags || paperData.arxiv_tags || [];
     
     // Create the row data
     result.push({
@@ -254,16 +661,15 @@ function processComplexData(data) {
       title: title,
       authors: authors,
       abstract: abstract,
-      published: paperData.published_date ? formatDate(paperData.published_date) : '',
+      published: paperData.publishedDate,
       firstRead: formatDate(paperMeta.created_at),
       lastRead: lastReadDate ? formatDate(lastReadDate) : formatDate(paperMeta.updated_at),
-      readingTime: formatReadingTime(totalReadingTime),
+      lastReadTimestamp: lastReadDate ? lastReadDate : paperMeta.updated_at,
       readingTimeSeconds: totalReadingTime,
       interactionDays: uniqueInteractionDays,
       tags: tags,
       url: paperData.url,
-      rawInteractionData: interactionData ? interactionData.interactions : [],
-      hasBeenRead: lastReadDate !== null
+      rawInteractionData: interactionData ? interactionData.interactions : []
     });
   }
   
@@ -272,23 +678,57 @@ function processComplexData(data) {
 
 // Initialize the Tabulator table
 function initTable(data) {
+
+  const interactionDays = data.map(d => d.interactionDays).filter(t => t > 0);
+  if (interactionDays.length > 0) {
+    const max_id = d3.max(interactionDays);
+    interactionDaysColorScale = d3.scaleSequential(d3.interpolateBlues)
+      .domain([1, max_id]);
+  }
+
+  const readingTimes = data.map(d => d.readingTimeSeconds).filter(t => t > 0);
+  if (readingTimes.length > 0) {
+    const p75 = d3.quantile(readingTimes.sort(d3.ascending), 0.75);
+    readingTimeColorScale = d3.scaleSequential(d3.interpolateBlues)
+      .domain([1, p75]);
+  }
+  
+  console.log("Reading time color scale domain:", readingTimeColorScale ? readingTimeColorScale.domain() : "No scale");
+  
   table = new Tabulator("#papers-table", {
     data: data,
     layout: "fitColumns",
     responsiveLayout: "collapse",
     pagination: "local",
-    paginationSize: 100,
-    paginationSizeSelector: [10, 25, 50, 100, 500, 1000],
+    paginationSize: 1000,
+    paginationSizeSelector: [10, 25, 50, 100, 500, 1000, 2000, 5000],
     movableColumns: true,
     groupBy: "lastRead",
     initialSort: [
+      {column: "lastReadTimestamp", dir: "desc"},
       {column: "lastRead", dir: "desc"}
     ],
     columns: [
       {
-        title: "ID", 
-        field: "id", 
-        widthGrow: 1
+        title: "Read Dates", 
+        field: "interactionDays", 
+        widthGrow: 1,
+        formatter: formatInteractionDaysWithColor
+      },
+      {
+        title: "Read Time (s)", 
+        field: "readingTimeSeconds",  
+        widthGrow: 1,
+        formatter: formatReadingTimeWithColor
+      },
+      {
+        title: "Title", 
+        field: "title", 
+        widthGrow: 6,
+        formatter: function(cell) {
+          const value = cell.getValue();
+          return value;
+        }
       },
       {
         title: "Source", 
@@ -296,75 +736,39 @@ function initTable(data) {
         widthGrow: 1
       },
       {
-        title: "Title", 
-        field: "title", 
-        widthGrow: 3,
-        formatter: function(cell) {
-          const value = cell.getValue();
-          return value;
-        }
-      },
-      {
-        title: "Authors", 
-        field: "authors", 
-        widthGrow: 2
-      },
-      {
         title: "Published", 
         field: "published", 
         widthGrow: 1
       },
       {
-        title: "First Read", 
-        field: "firstRead", 
-        widthGrow: 1
+        title: "Tags", 
+        field: "tags", 
+        widthGrow: 1,
+        formatter: formatTags
       },
       {
-        title: "Last Read", 
+        title: "Last Read Date", 
         field: "lastRead", 
         widthGrow: 1
       },
       {
-        title: "Reading Time", 
-        field: "readingTimeSeconds", 
-        widthGrow: 1,
-        formatter: function(cell) {
-          return cell.getRow().getData().readingTime;
-        }
-      },
-      {
-        title: "Days", 
-        field: "interactionDays", 
-        widthGrow: 1,
-        formatter: function(cell) {
-          const value = cell.getValue();
-          if (value === 0) return "None";
-          return value === 1 ? "1 day" : `${value} days`;
-        }
-      },
-      {
-        title: "Tags", 
-        field: "tags", 
-        widthGrow: 2,
-        formatter: formatTags
+        title: "Last Read time", 
+        field: "lastReadTimestamp", 
+        widthGrow: 1
       }
     ],
     rowFormatter: function(row) {
-      // Add classes based on read status
-      // if (row.getData().hasBeenRead) {
-      //   row.getElement().classList.add("paper-read");
-      // } else {
-      //   row.getElement().classList.add("paper-unread");
-      // }
-      
       // Add paper ID as data attribute
       const rowElement = row.getElement();
       const paper_Id = row.getData().paperKey;
-      //const paper_Id = row.getData("id");
       console.log("formatter detected paperId:", paper_Id);
       rowElement.setAttribute("data-paper-id", paper_Id);
     }
   });
+  
+  // Initialize filter manager and status bar
+  filterManager = new FilterManager(table);
+  filterStatusBar = new FilterStatusBar(filterManager);
   
   // Remove loading message
   document.querySelector(".loading").style.display = "none";
@@ -383,22 +787,133 @@ function initTable(data) {
   });
 }
 
+// Helper functions for filters
+function createSearchFilter(searchTerm) {
+  const term = searchTerm.toLowerCase().trim();
+  return function(data) {
+    if (!term) return true;
+    
+    const searchableText = [
+      data.title,
+      data.authors,
+      data.abstract,
+      ...(data.tags || [])
+    ].join(' ').toLowerCase();
+    
+    return searchableText.includes(term);
+  };
+}
+
+function createMultiSearchFilter(searchTerms) {
+  // OR logic: papers must contain ANY of the search terms
+  return function(data) {
+    if (!searchTerms || searchTerms.length === 0) return true;
+    
+    const searchableText = [
+      data.title,
+      data.authors,
+      data.abstract,
+      ...(data.tags || [])
+    ].join(' ').toLowerCase();
+    
+    return searchTerms.some(term => 
+      searchableText.includes(term.toLowerCase().trim())
+    );
+  };
+}
+
+function createDateRangeFilter(fromDate, toDate) {
+  return function(data) {
+    if (!fromDate && !toDate) return true;
+    if (!data.published) return false;
+    
+    const publishedDate = data.published;
+    
+    if (fromDate && toDate) {
+      return publishedDate >= fromDate && publishedDate <= toDate;
+    }
+    
+    if (fromDate) {
+      return publishedDate >= fromDate;
+    }
+    
+    if (toDate) {
+      return publishedDate <= toDate;
+    }
+    
+    return true;
+  };
+}
+
+function createReadingTimeFilter(minMinutes) {
+  const minSeconds = minMinutes * 60;
+  return function(data) {
+    return data.readingTimeSeconds >= minSeconds;
+  };
+}
+
+function createInteractionDaysFilter(minDays) {
+  return function(data) {
+    return data.interactionDays >= minDays;
+  };
+}
+
+// Multi-search state management
+let searchTermCounter = 0;
+let currentPreviewSearchTerm = null;
+
 // Setup event listeners for filters and search
 function setupEventListeners() {
-// Global search
-  document.getElementById("search-input").addEventListener("input", function(e) {
-    table.setFilter(function(data) {
-      const searchTerm = e.target.value.toLowerCase().trim();
-      if (!searchTerm) return true;
+  const searchInput = document.getElementById("search-input");
+  
+  // Global search with debouncing for preview
+  let searchTimeout;
+  searchInput.addEventListener("input", function(e) {
+    const searchTerm = e.target.value.trim();
+    
+    // Clear previous timeout
+    clearTimeout(searchTimeout);
+    
+    // Debounce search input for preview
+    searchTimeout = setTimeout(() => {
+      if (searchTerm) {
+        // Show preview of current search term
+        currentPreviewSearchTerm = searchTerm;
+        filterManager.setFilter('search-preview', createSearchFilter(searchTerm), `Search: "${searchTerm}"`);
+      } else {
+        // Clear preview when input is empty
+        currentPreviewSearchTerm = null;
+        filterManager.removeFilter('search-preview');
+      }
+    }, 300);
+  });
+  
+  // Handle Enter key to commit search term
+  searchInput.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const searchTerm = e.target.value.trim();
       
-      // Search in title, authors, abstract, and tags
-      return (
-        data.title.toLowerCase().includes(searchTerm) ||
-        data.authors.toLowerCase().includes(searchTerm) ||
-        data.abstract.toLowerCase().includes(searchTerm) ||
-        data.tags.some(tag => tag.toLowerCase().includes(searchTerm))
-      );
-    });
+      if (searchTerm) {
+        // Remove the preview filter
+        filterManager.removeFilter('search-preview');
+        currentPreviewSearchTerm = null;
+        
+        // Add committed search term with unique ID
+        const searchId = `search-${++searchTermCounter}`;
+        filterManager.setFilter(searchId, createSearchFilter(searchTerm), `Search: "${searchTerm}"`);
+        
+        // Clear the input for next search term
+        e.target.value = "";
+      }
+    }
+  });
+  
+  // Clear search button - clears current input and preview
+  document.getElementById("clear-search").addEventListener("click", function() {
+    document.getElementById("search-input").value = "";
+    filterManager.removeFilter('search-preview');
+    currentPreviewSearchTerm = null;
   });
   
   // Toggle filter sidebar
@@ -425,97 +940,64 @@ function setupEventListeners() {
     }
   });
   
-  // Date filter
+  // Date range filters
   document.getElementById("apply-date-filter").addEventListener("click", function() {
     const fromDate = document.getElementById("date-filter-from").value;
     const toDate = document.getElementById("date-filter-to").value;
     
-    table.setFilter(function(data) {
-      if (!fromDate && !toDate) return true;
-      if (!data.published) return false;
-      
-      if (fromDate && toDate) {
-        return data.published >= fromDate && data.published <= toDate;
-      }
-      
-      if (fromDate) {
-        return data.published >= fromDate;
-      }
-      
-      if (toDate) {
-        return data.published <= toDate;
-      }
-      
-      return true;
-    });
+    if (fromDate || toDate) {
+      const description = formatDateRangeDescription(fromDate, toDate);
+      filterManager.setFilter('dateRange', createDateRangeFilter(fromDate, toDate), description);
+    } else {
+      filterManager.removeFilter('dateRange');
+    }
   });
   
   document.getElementById("clear-date-filter").addEventListener("click", function() {
     document.getElementById("date-filter-from").value = "";
     document.getElementById("date-filter-to").value = "";
-    table.clearFilter();
+    filterManager.removeFilter('dateRange');
   });
-  
-  // Read/Unread filters
-  function updateReadFilter() {
-    const showRead = document.getElementById("filter-read").checked;
-    const showUnread = document.getElementById("filter-unread").checked;
-    
-    if (showRead && showUnread) {
-      table.removeFilter("hasBeenRead");
-      return;
-    }
-    
-    if (showRead) {
-      table.setFilter("hasBeenRead", "=", true);
-      return;
-    }
-    
-    if (showUnread) {
-      table.setFilter("hasBeenRead", "=", false);
-      return;
-    }
-    
-    // If neither is checked, show nothing
-    table.setFilter(function() { return false; });
-  }
-  
-  document.getElementById("filter-read").addEventListener("change", updateReadFilter);
-  document.getElementById("filter-unread").addEventListener("change", updateReadFilter);
   
   // Reading time filter
   document.getElementById("apply-reading-filter").addEventListener("click", function() {
     const minReading = document.getElementById("min-reading-time").value;
     
-    if (!minReading) {
-      table.removeFilter("readingTimeSeconds");
-      return;
+    if (minReading && minReading > 0) {
+      filterManager.setFilter(
+        'readingTime', 
+        createReadingTimeFilter(parseInt(minReading)), 
+        `Reading time: ≥${minReading} min`
+      );
+    } else {
+      filterManager.removeFilter('readingTime');
     }
-    
-    const minSeconds = parseInt(minReading) * 60;
-    table.setFilter("readingTimeSeconds", ">=", minSeconds);
   });
   
   document.getElementById("clear-reading-filter").addEventListener("click", function() {
     document.getElementById("min-reading-time").value = "";
-    table.removeFilter("readingTimeSeconds");
+    filterManager.removeFilter('readingTime');
   });
   
   // Interaction days filter
   document.getElementById("apply-days-filter").addEventListener("click", function() {
     const minDays = document.getElementById("min-interaction-days").value;
     
-    if (!minDays) {
-      table.removeFilter("interactionDays");
-      return;
+    if (minDays && minDays > 0) {
+      const days = parseInt(minDays);
+      filterManager.setFilter(
+        'interactionDays', 
+        createInteractionDaysFilter(days), 
+        `Interaction days: ≥${days}`
+      );
+    } else {
+      filterManager.removeFilter('interactionDays');
     }
-    
-    table.setFilter("interactionDays", ">=", parseInt(minDays));
   });
   
   document.getElementById("clear-days-filter").addEventListener("click", function() {
     document.getElementById("min-interaction-days").value = "";
-    table.removeFilter("interactionDays");
+    filterManager.removeFilter('interactionDays');
   });
   
   // Reset all filters
@@ -527,13 +1009,25 @@ function setupEventListeners() {
     document.getElementById("min-reading-time").value = "";
     document.getElementById("min-interaction-days").value = "";
     
-    // Reset checkboxes
-    document.getElementById("filter-read").checked = true;
-    document.getElementById("filter-unread").checked = true;
+    // Reset search counter and preview state
+    searchTermCounter = 0;
+    currentPreviewSearchTerm = null;
     
-    // Clear all table filters
-    table.clearFilter();
+    // Clear all filters through filter manager
+    filterManager.clearAll();
   });
+}
+
+// Helper function to format date range descriptions
+function formatDateRangeDescription(fromDate, toDate) {
+  if (fromDate && toDate) {
+    return `Date: ${fromDate} to ${toDate}`;
+  } else if (fromDate) {
+    return `Date: from ${fromDate}`;
+  } else if (toDate) {
+    return `Date: until ${toDate}`;
+  }
+  return 'Date range';
 }
 
 // Load and initialize
@@ -548,7 +1042,14 @@ document.addEventListener("DOMContentLoaded", function() {
     })
     .then(data => {
       allData = processComplexData(data);
+      
+      // Extract reading activity data for heatmap
+      readingActivityData = extractReadingActivityData(allData);
+      console.log("Reading activity data:", readingActivityData.length, "days");
+      
+      // Initialize table and heatmap
       initTable(allData);
+      createReadingHeatmap(readingActivityData);
       setupEventListeners();
     })
     .catch(error => {
