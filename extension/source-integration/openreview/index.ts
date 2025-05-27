@@ -103,9 +103,9 @@ export class OpenReviewIntegration extends BaseSourceIntegration {
   ];
   
   // Content script matches
-  readonly contentScriptMatches = [
-    "*://*.openreview.net/*"
-  ];
+  // readonly contentScriptMatches = [
+  //   "*://*.openreview.net/*"
+  // ];
 
   /**
    * Extract paper ID from URL
