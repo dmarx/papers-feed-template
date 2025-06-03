@@ -38,24 +38,60 @@ h1 {
   justify-content: center;
   min-width: 0; /* Allow shrinking */
   padding: 0 20px;
+  width: 100%; /* Ensure full width */
 }
 
 .heatmap-title {
   font-size: 12px;
   color: #666;
   margin-bottom: 8px;
-  text-align: center;
   font-weight: 500;
   min-height: 16px; /* Reserve space to prevent layout shift */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px; /* Space between dropdown and legend */
+  /* Width will be set dynamically by JavaScript to match heatmap */
+}
+
+.heatmap-dropdown {
+  font-size: 12px;
+  color: #666;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-weight: 500;
+  outline: none;
+  flex-shrink: 0; /* Don't shrink the dropdown */
+}
+
+.heatmap-dropdown:hover {
+  border-color: #1a73e8;
+}
+
+.heatmap-dropdown:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
 }
 
 .heatmap-legend {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 6px;
   font-size: 11px;
   color: #666;
+  flex-shrink: 0; /* Don't shrink the legend */
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #666;
+  flex-shrink: 0; /* Don't shrink the legend */
 }
 
 .legend-cell {
