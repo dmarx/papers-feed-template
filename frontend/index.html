@@ -13,6 +13,9 @@
   <!-- D3.js for color scales -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
   
+  <!-- Date parsing and normalizaiton -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chrono-node/1.0.5/chrono.min.js"></script>
+  
   <!-- Font Awesome for icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
   <link rel="stylesheet" href="papersfeed.css">
@@ -25,17 +28,26 @@
     </div>
 
     <div class="heatmap-container">
-      <div class="heatmap-title">Reading Activity (Papers per day)</div>
-      <div id="reading-heatmap"></div>
-      <div class="heatmap-legend">
-        <span>Less</span>
-        <div class="legend-cell" style="background-color: #ebedf0;"></div>
-        <div class="legend-cell" style="background-color: #c6e48b;"></div>
-        <div class="legend-cell" style="background-color: #7bc96f;"></div>
-        <div class="legend-cell" style="background-color: #239a3b;"></div>
-        <div class="legend-cell" style="background-color: #196127;"></div>
-        <span>More</span>
+      <div class="heatmap-title">
+        <select id="heatmap-metric-selector" class="heatmap-dropdown">
+          <option value="papers">Papers per day</option>
+          <option value="time">Reading time per day</option>
+          <option value="sessions">Sessions per day</option>
+          <option value="discoveries">Papers discovered per day</option>
+        </select>
+
+        <div class="heatmap-legend">
+          <span>Less</span>
+          <div class="legend-cell" style="background-color: #ebedf0;"></div>
+          <div class="legend-cell" style="background-color: #c6e48b;"></div>
+          <div class="legend-cell" style="background-color: #7bc96f;"></div>
+          <div class="legend-cell" style="background-color: #239a3b;"></div>
+          <div class="legend-cell" style="background-color: #196127;"></div>
+          <span>More</span>
+        </div>
+
       </div>
+      <div id="reading-heatmap"></div>
     </div>
 
     <div class="controls">
